@@ -67,9 +67,18 @@ export function LandingPage() {
             <h1 className="mt-6 text-4xl font-black leading-tight sm:text-6xl">Tu hotel, más ordenado y listo para trabajar con el sector minero.</h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">ValStay reúne habitaciones, huéspedes, pagos y reportes en un solo lugar, con especial atención a los hospedajes que reciben personal de empresas mineras y necesitan preparar valorizaciones.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="https://wa.me/950336798?text=Hola%2C%20quiero%20probar%20ValStay%20durante%2014%20d%C3%ADas." target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 px-6 py-3.5 font-bold shadow-lg shadow-cyan-950 hover:brightness-110">Probar gratis <ChevronRight className="h-5 w-5" /></a>
-              <a href="/" className="rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 font-semibold hover:bg-white/10">Ya tengo una cuenta</a>
+              <a href="https://wa.me/950336798?text=Hola%2C%20quiero%20conocer%20m%C3%A1s%20sobre%20ValStay." target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 px-6 py-3.5 font-bold shadow-lg shadow-cyan-950 hover:brightness-110">Contáctame <ChevronRight className="h-5 w-5" /></a>
+              <button
+                type="button"
+                onClick={openSystemDemo}
+                disabled={openingDemo}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 font-semibold transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
+              >
+                {openingDemo ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <LogIn className="h-4 w-4" />}
+                {openingDemo ? 'Abriendo demo...' : 'Probar demo'}
+              </button>
             </div>
+            {demoError && <p className="mt-3 text-sm font-semibold text-red-400">{demoError}</p>}
           </div>
           <div className="flex flex-col items-center">
             <img src={blinking ? '/puchi-cerrado.png' : '/puchi-abierto.png'} alt="Puchi" className="h-64 w-64 object-contain drop-shadow-2xl" />
@@ -158,23 +167,6 @@ export function LandingPage() {
               <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300"><Icon className="h-5 w-5" /></div>
               <h3 className="font-bold">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{text}</p>
             </div>)}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-5 py-20">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex flex-col items-center text-center">
-            <button
-              type="button"
-              onClick={openSystemDemo}
-              disabled={openingDemo}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-600 to-emerald-600 px-8 py-4 text-lg font-black text-white shadow-xl shadow-cyan-950/40 transition-all hover:scale-[1.02] hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
-            >
-              {openingDemo ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <LogIn className="h-5 w-5" />}
-              {openingDemo ? 'Abriendo demo...' : 'Mostrar demo'}
-            </button>
-            {demoError && <p className="mt-3 text-sm font-semibold text-red-400">{demoError}</p>}
           </div>
         </div>
       </section>
