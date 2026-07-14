@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Room, StayWithDetails, getClient } from '../lib/supabase';
 import { RoomCard } from './RoomCard';
-import { ChevronDown, Building2, LayoutGrid, Map } from 'lucide-react';
+import { ChevronDown, Building2, HardHat, LayoutGrid, Map } from 'lucide-react';
 import { FloorPlan } from './FloorPlan';
 
 
@@ -36,6 +36,7 @@ interface DashboardProps {
 }
 
 type FilterStatus = 'all' | 'available' | 'occupied' | 'maintenance' | 'cleaning' | 'leaving_today';
+type WorkerTypeFilter = 'all' | 'obrero' | 'empleado' | 'staff';
 type ViewMode = 'grid' | 'plan';
 
 export function Dashboard({
@@ -55,6 +56,7 @@ export function Dashboard({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [empresaFilter, setEmpresaFilter] = useState<string>('all');
+  const [workerTypeFilter, setWorkerTypeFilter] = useState<WorkerTypeFilter>('all');
   const [puchiBlinking, setPuchiBlinking] = useState(false);
   useEffect(() => {
   let blinkTimeout: number | undefined;
@@ -107,9 +109,10 @@ export function Dashboard({
 // Habitaciones consideradas en los indicadores.
 // Al seleccionar una empresa, los contadores muestran solo sus habitaciones.
 const countableRooms = guestRooms.filter(room => {
-  if (empresaFilter === 'all') return true;
-
-  return stayByRoomId[room.id]?.empresa === empresaFilter;
+  const stay = stayByRoomId[room.id];
+  const matchEmpresa = empresaFilter === 'all' || stay?.empresa === empresaFilter;
+  const matchWorkerType = workerTypeFilter === 'all' || stay?.worker_type === workerTypeFilter;
+  return matchEmpresa && matchWorkerType;
 });
 
 const totalRoomsCount = countableRooms.length;
@@ -139,6 +142,10 @@ const leavingTodayCount = countableRooms.filter(
       ? true
       : stayByRoomId[r.id]?.empresa === empresaFilter;
     if (!matchEmpresa) return false;
+    const matchWorkerType = workerTypeFilter === 'all'
+      ? true
+      : stayByRoomId[r.id]?.worker_type === workerTypeFilter;
+    if (!matchWorkerType) return false;
     if (statusFilter === 'all') return true;
     if (statusFilter === 'leaving_today') return isLeavingToday(stayByRoomId[r.id]);
     return effectiveRoom(r).status === statusFilter;
@@ -227,6 +234,28 @@ const leavingTodayCount = countableRooms.filter(
             )}
           </div>
         )}
+
+        <div className="relative">
+          <HardHat
+            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none"
+            style={{ color: workerTypeFilter !== 'all' ? 'white' : undefined }}
+          />
+          <select
+            value={workerTypeFilter}
+            onChange={e => setWorkerTypeFilter(e.target.value as WorkerTypeFilter)}
+            className={`cursor-pointer appearance-none rounded-full border py-1.5 pl-8 pr-8 text-sm font-medium transition-all ${
+              workerTypeFilter !== 'all'
+                ? 'border-amber-500 bg-amber-500 text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+            }`}
+          >
+            <option value="all">Todos los tipos</option>
+            <option value="obrero">Obreros</option>
+            <option value="empleado">Empleados</option>
+            <option value="staff">Staff</option>
+          </select>
+          <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 ${workerTypeFilter !== 'all' ? 'text-white' : 'text-gray-400'}`} />
+        </div>
 
        
 

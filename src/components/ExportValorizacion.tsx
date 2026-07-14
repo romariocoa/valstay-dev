@@ -14,6 +14,9 @@ import * as XLSX from 'xlsx';
 interface Props {
   tenantId: string;
   onClose: () => void;
+  initialEmpresa?: string;
+  initialStartDate?: string;
+  initialEndDate?: string;
 }
 
 const MONTH_NAMES_ES = [
@@ -203,15 +206,18 @@ async function loadImageAsBase64(url: string): Promise<string> {
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
-export function ExportValorizacion({ tenantId, onClose }: Props) {
+export function ExportValorizacion({ tenantId, onClose, initialEmpresa, initialStartDate, initialEndDate }: Props) {
   const today        = new Date();
+  const lastNight    = new Date(today);
+  lastNight.setDate(lastNight.getDate() - 1);
   const pad          = (n: number) => String(n).padStart(2, '0');
-  const firstOfMonth = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
-  const todayStr     = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const firstOfMonth = `${lastNight.getFullYear()}-${pad(lastNight.getMonth() + 1)}-01`;
+  const lastNightStr = `${lastNight.getFullYear()}-${pad(lastNight.getMonth() + 1)}-${pad(lastNight.getDate())}`;
 
-  const [startDate,       setStartDate]       = useState(firstOfMonth);
-  const [endDate,         setEndDate]         = useState(todayStr);
-  const [selectedEmpresa, setSelectedEmpresa] = useState('');
+  const lockedContext = Boolean(initialEmpresa && initialStartDate && initialEndDate);
+  const [startDate,       setStartDate]       = useState(initialStartDate ?? firstOfMonth);
+  const [endDate,         setEndDate]         = useState(initialEndDate ?? lastNightStr);
+  const [selectedEmpresa, setSelectedEmpresa] = useState(initialEmpresa ?? '');
   const [tarifaObrero, setTarifaObrero] = useState('41.20');
   const [workerTypesPresent, setWorkerTypesPresent] = useState<WorkerType[]>([]);
 const [loadingWorkerTypes, setLoadingWorkerTypes] = useState(false);
@@ -419,11 +425,16 @@ for (const sr of summaryRows) {
   aoa.push(sr);
 }
 
+      aoa.push(blank());
+      const BRAND_ROW = aoa.length;
+      aoa.push(['by ValStay', ...Array(TOTAL_COLS - 1).fill('')]);
+
       const ws = XLSX.utils.aoa_to_sheet(aoa);
 
       const merges: XLSX.Range[] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: TOTAL_COLS - 1 } },
         { s: { r: 2, c: 0 }, e: { r: 2, c: TOTAL_COLS - 1 } },
+        { s: { r: BRAND_ROW, c: 0 }, e: { r: BRAND_ROW, c: 2 } },
         ...[3, 4, 5, 6, 7, 8, 9, 10].map(r => ({ s: { r, c: 1 }, e: { r, c: TOTAL_COLS - 1 } })),
         { s: { r: HEADER_ROWS, c: 0 }, e: { r: HEADER_ROWS + 1, c: 0 } },
         { s: { r: HEADER_ROWS, c: 1 }, e: { r: HEADER_ROWS + 1, c: 1 } },
@@ -444,7 +455,7 @@ for (const sr of summaryRows) {
       ws['!merges'] = merges;
 
       ws['!cols'] = [
-        { wch: 26 }, { wch: 36 }, { wch: 18 }, { wch: 12 },
+        { wch: 6 }, { wch: 36 }, { wch: 16 }, { wch: 12 },
         ...days.map(() => ({ wch: 4 })),
         { wch: 9 }, { wch: 10 }, { wch: 14 },
       ];
@@ -493,6 +504,10 @@ for (const sr of summaryRows) {
         applyStyle(ws, R, cTarifa, fillStyle(GRAY_RGB, true, 'center'));
         applyStyle(ws, R, cTotal,  fillStyle(GRAY_RGB, true, 'right'));
       }
+      applyStyle(ws, BRAND_ROW, 0, {
+        font: { italic: true, sz: 7, name: 'Calibri', color: { rgb: 'B7B7B7' } },
+        alignment: { horizontal: 'left', vertical: 'center' },
+      });
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Valorización');
@@ -602,8 +617,8 @@ for (const sr of summaryRows) {
       const usable = pageW - margin * 2;
       // Compact fixed cols to give maximum room to the day columns
       const W_NUM   = 6;
-      const W_NAME  = 40;
-      const W_CARGO = 8;
+      const W_NAME  = 38;
+      const W_CARGO = 16;
       const W_DNI   = 14;
       const W_CANT  = 8;
       const W_TAR   = 14;
@@ -662,7 +677,7 @@ for (const sr of summaryRows) {
         columnStyles: {
           0: { halign: 'center', cellWidth: W_NUM },
           1: { halign: 'left',   cellWidth: W_NAME },
-          2: { halign: 'center', cellWidth: W_CARGO },
+          2: { halign: 'center', cellWidth: W_CARGO, fontSize: 5.5, overflow: 'visible' },
           3: { halign: 'center', cellWidth: W_DNI },
           ...Object.fromEntries(
             days.map((_, i) => [4 + i, { halign: 'center', cellWidth: dayW, cellPadding: { top: 1.2, bottom: 1.2, left: 0.3, right: 0.3 } }])
@@ -737,16 +752,22 @@ for (const sr of summaryRows) {
         } catch { /* skip firma on error */ }
       }
 
-      // ── Footer ───────────────────────────────────────────────────────────────
+      // ── Small ValStay maker mark + page footer ──────────────────────────────
       const totalPages = doc.getNumberOfPages();
       for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p);
+        const pageH = doc.internal.pageSize.getHeight();
+        doc.setFontSize(5);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(205, 205, 205);
+        doc.text('by ValStay', margin, pageH - 5.5);
+
         doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(150, 150, 150);
         doc.text(
           `Pág. ${p} / ${totalPages}`,
-          pageW - margin, doc.internal.pageSize.getHeight() - 5,
+          pageW - margin, pageH - 5,
           { align: 'right' },
         );
         doc.setTextColor(0, 0, 0);
@@ -772,8 +793,8 @@ for (const sr of summaryRows) {
               <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 dark:text-zinc-100">Exportar Valorización</h2>
-              <p className="text-sm text-gray-500 dark:text-zinc-400">Solo estadias vinculadas a una empresa</p>
+              <h2 className="font-bold text-gray-900 dark:text-zinc-100">Emitir valorización</h2>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">Define las tarifas antes de generar el archivo</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">
@@ -783,7 +804,17 @@ for (const sr of summaryRows) {
 
         {/* Body */}
         <div className="p-6 space-y-5">
+          {lockedContext && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-800 dark:bg-emerald-900/20">
+              <p className="font-bold text-emerald-800 dark:text-emerald-300">{selectedEmpresa}</p>
+              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                Periodo: {formatDateLabel(startDate)} al {formatDateLabel(endDate)}
+              </p>
+            </div>
+          )}
+
           {/* Empresa */}
+          {!lockedContext && (
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">
               <Building2 className="w-4 h-4 text-gray-400" />
@@ -812,6 +843,7 @@ for (const sr of summaryRows) {
               </div>
             )}
           </div>
+          )}
 
      {/* Tarifas */}
 {selectedEmpresa && (
@@ -869,6 +901,7 @@ for (const sr of summaryRows) {
 )}
 
           {/* Date range */}
+          {!lockedContext && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2 flex items-center gap-1.5">
@@ -878,6 +911,7 @@ for (const sr of summaryRows) {
               <input
                 type="date"
                 value={startDate}
+                max={lastNightStr}
                 onChange={e => setStartDate(e.target.value)}
                 className="w-full border border-gray-300 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100"
               />
@@ -891,11 +925,13 @@ for (const sr of summaryRows) {
                 type="date"
                 value={endDate}
                 min={startDate}
+                max={lastNightStr}
                 onChange={e => setEndDate(e.target.value)}
                 className="w-full border border-gray-300 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100"
               />
             </div>
           </div>
+          )}
 
          {/* Summary */}
 {canExport && (

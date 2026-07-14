@@ -32,12 +32,18 @@ function localDateStr(d: Date = new Date()): string {
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 }
 
+function lastCompletedNightStr(): string {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return localDateStr(date);
+}
+
 interface StayHistoryProps {
   tenantId: string;
   rooms: Room[];
   canDelete?: boolean;
   canValorizacion?: boolean;
-  onExportValorizacion?: () => void;
+  onExportValorizacion?: (options?: { empresa: string; startDate: string; endDate: string }) => void;
 }
 
 type Tab = 'particulares' | 'empresas' | 'reporte_empresa';
@@ -58,6 +64,13 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
 
   // Empresas filter
   const [clientFilter, setClientFilter] = useState('all');
+  const [activeGuestsOpen, setActiveGuestsOpen] = useState(false);
+  const [valuationStart, setValuationStart] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return localDateStr(date);
+  });
+  const [valuationEnd, setValuationEnd] = useState(lastCompletedNightStr());
 
   const floors = [...new Set(rooms.map(r => r.floor))].sort((a, b) => a - b);
 
@@ -68,6 +81,48 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
   // Base partition
   const particulares = stays.filter(s => !s.empresa);
   const empresaStays = stays.filter(s => !!s.empresa);
+  const valuationDayDifference = valuationStart && valuationEnd
+    ? Math.round((new Date(`${valuationEnd}T12:00:00`).getTime() - new Date(`${valuationStart}T12:00:00`).getTime()) / 86400000)
+    : -1;
+  const valuationError = clientFilter === 'all'
+    ? 'Selecciona una empresa para visualizar la valorización.'
+    : !valuationStart || !valuationEnd
+    ? 'Selecciona ambas fechas.'
+    : valuationStart > valuationEnd
+      ? 'La fecha inicial no puede ser posterior a la fecha final.'
+      : valuationEnd > lastCompletedNightStr()
+        ? 'La fecha final máxima es la última noche completada: ayer.'
+        : valuationDayDifference > 30
+          ? 'El rango máximo permitido es de 31 días.'
+          : '';
+  const valuationDays = valuationError ? [] : Array.from(
+    { length: valuationDayDifference + 1 },
+    (_, index) => {
+      const date = new Date(`${valuationStart}T12:00:00`);
+      date.setDate(date.getDate() + index);
+      return localDateStr(date);
+    },
+  );
+  const valuationGroups = new Map<string, typeof empresaStays>();
+  empresaStays
+    .filter(stay => clientFilter === 'all' || stay.empresa === clientFilter)
+    .forEach(stay => {
+      const key = `${stay.guests?.dni ?? stay.guest_id}-${stay.worker_type ?? 'sin-cargo'}`;
+      valuationGroups.set(key, [...(valuationGroups.get(key) ?? []), stay]);
+    });
+  const valuationRows = Array.from(valuationGroups.values()).map(group => {
+    const first = group[0];
+    const values = valuationDays.map(day => group.some(stay => {
+      const checkIn = stay.check_in_date?.slice(0, 10);
+      const checkOut = stay.check_out_date?.slice(0, 10);
+      const bajaStart = stay.baja_start_date?.slice(0, 10);
+      const bajaEnd = stay.baja_end_date?.slice(0, 10);
+      if (!checkIn || day < checkIn || (checkOut && day > checkOut)) return false;
+      return !(bajaStart && bajaEnd && day >= bajaStart && day <= bajaEnd);
+    }) ? 1 : 0);
+    return { stay: first, values, total: values.reduce<number>((sum, value) => sum + value, 0) };
+  }).filter(row => row.total > 0)
+    .sort((a, b) => a.stay.guests.name.localeCompare(b.stay.guests.name, 'es'));
 
   // Filter particulares
   const filteredParticulares = particulares.filter(s => {
@@ -172,7 +227,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
   const inputCls = 'py-2.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-gray-800 dark:focus:ring-zinc-500 focus:border-transparent text-sm text-gray-900 dark:text-zinc-100';
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       {/* Tabs */}
 <div className="flex gap-1 p-1 bg-gray-100 dark:bg-zinc-800 rounded-xl w-fit flex-wrap">
   {/* Primera pestaña: Reporte por empresa */}
@@ -211,25 +266,6 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     </span>
   </button>
 
-  {/* Tercera pestaña: Valorización */}
-  <button
-    onClick={() => {
-      setTab('empresas');
-      setExpandedId(null);
-    }}
-    className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-      tab === 'empresas'
-        ? 'bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 shadow-sm'
-        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
-    }`}
-  >
-    <FileSpreadsheet className="w-4 h-4" />
-    Valorizar
-
-    <span className="text-xs font-normal bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400 px-1.5 py-0.5 rounded-full">
-      {empresaStays.length}
-    </span>
-  </button>
 </div>
 
       {loading ? (
@@ -274,10 +310,147 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
           onExportValorizacion={onExportValorizacion}
         />
       ) : (
-        <ReporteEmpresa
-  tenantId={tenantId}
-  inputCls={inputCls}
-/>
+        <div className="order-3 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <button
+            type="button"
+            onClick={() => setActiveGuestsOpen(open => !open)}
+            className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/60"
+          >
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-800 dark:text-zinc-100">Huéspedes activos por día</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">Consulta quiénes estuvieron alojados en una fecha específica.</p>
+              </div>
+            </div>
+            {activeGuestsOpen ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+          </button>
+          {activeGuestsOpen && (
+            <div className="border-t border-gray-100 p-4 dark:border-zinc-800">
+              <ReporteEmpresa tenantId={tenantId} inputCls={inputCls} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'reporte_empresa' && canValorizacion && onExportValorizacion && (
+        <div className="order-2 flex justify-center py-2">
+          <button
+            type="button"
+            onClick={() => onExportValorizacion({
+              empresa: clientFilter,
+              startDate: valuationStart,
+              endDate: valuationEnd,
+            })}
+            disabled={Boolean(valuationError)}
+            className="flex min-w-[280px] items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-8 py-4 text-base font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 dark:shadow-none"
+          >
+            <FileSpreadsheet className="h-5 w-5" />
+            Emitir valorización
+          </button>
+        </div>
+      )}
+
+      {tab === 'reporte_empresa' && (
+      <div className="order-1 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex w-full items-center gap-3 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <FileSpreadsheet className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 dark:text-zinc-100">Visualizar valorización</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400">Consulta noches por huésped en un rango máximo de 31 días.</p>
+            </div>
+          </div>
+        </div>
+
+          <div className="border-t border-gray-100 p-5 dark:border-zinc-800">
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-zinc-400">Empresa</label>
+                <select
+                  value={clientFilter}
+                  onChange={event => setClientFilter(event.target.value)}
+                  className={`w-full px-3 ${inputCls}`}
+                >
+                  <option value="all" disabled>Selecciona una empresa</option>
+                  {empresas.map(empresa => <option key={empresa} value={empresa}>{empresa}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-zinc-400">Fecha inicial</label>
+                <input
+                  type="date"
+                  value={valuationStart}
+                  max={lastCompletedNightStr()}
+                  onChange={event => setValuationStart(event.target.value)}
+                  className={`w-full px-3 ${inputCls}`}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-zinc-400">Fecha final</label>
+                <input
+                  type="date"
+                  value={valuationEnd}
+                  min={valuationStart}
+                  max={lastCompletedNightStr()}
+                  onChange={event => setValuationEnd(event.target.value)}
+                  className={`w-full px-3 ${inputCls}`}
+                />
+              </div>
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-gray-500 dark:text-zinc-400">
+                Empresa: <strong className="text-gray-800 dark:text-zinc-200">{clientFilter === 'all' ? 'Todas las empresas' : clientFilter}</strong>
+              </span>
+              {!valuationError && <span className="font-semibold text-emerald-600 dark:text-emerald-400">{valuationDays.length} día{valuationDays.length !== 1 ? 's' : ''}</span>}
+            </div>
+
+            {valuationError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">{valuationError}</div>
+            ) : valuationRows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400 dark:border-zinc-700 dark:text-zinc-500">No existen noches registradas para este rango y empresa.</div>
+            ) : (
+              <div className="overflow-auto rounded-xl border border-gray-200 dark:border-zinc-700">
+                <table className="w-full min-w-max text-[9px] leading-tight">
+                  <thead className="bg-gray-50 dark:bg-zinc-800">
+                    <tr className="border-b border-gray-200 dark:border-zinc-700">
+                      <th className="sticky left-0 z-10 w-9 min-w-9 bg-gray-50 px-1 py-2 text-center font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">N.°</th>
+                      <th className="sticky left-9 z-10 w-36 min-w-36 bg-gray-50 px-2 py-2 text-left font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">NOMBRE</th>
+                      <th className="w-20 min-w-20 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">DNI</th>
+                      <th className="w-16 min-w-16 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">CARGO</th>
+                      {valuationDays.map(day => (
+                        <th key={day} className="w-7 min-w-7 px-0.5 py-1.5 text-center font-bold text-gray-600 dark:text-zinc-300">
+                          <span className="block">{day.slice(8, 10)}</span>
+                          <span className="block text-[7px] font-medium text-gray-400">/{day.slice(5, 7)}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                    {valuationRows.map((row, index) => (
+                      <tr key={`${row.stay.guests?.dni ?? index}-${row.stay.worker_type ?? ''}`} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50">
+                        <td className="sticky left-0 w-9 min-w-9 bg-white px-1 py-2 text-center font-semibold text-gray-500 dark:bg-zinc-900 dark:text-zinc-400">{index + 1}</td>
+                        <td className="sticky left-9 w-36 min-w-36 max-w-36 truncate bg-white px-2 py-2 font-semibold uppercase text-gray-800 dark:bg-zinc-900 dark:text-zinc-100" title={row.stay.guests?.name ?? ''}>{row.stay.guests?.name?.toUpperCase() ?? '—'}</td>
+                        <td className="w-20 min-w-20 px-2 py-2 font-mono text-gray-500 dark:text-zinc-400">{row.stay.guests?.dni ?? '—'}</td>
+                        <td className="w-16 min-w-16 px-2 py-2 uppercase text-gray-600 dark:text-zinc-300">{row.stay.worker_type || 'SIN CARGO'}</td>
+                        {row.values.map((value, dayIndex) => (
+                          <td key={valuationDays[dayIndex]} className={`w-7 min-w-7 px-0.5 py-2 text-center font-black ${value ? 'bg-lime-300 text-lime-950 dark:bg-lime-600 dark:text-white' : 'text-gray-300 dark:text-zinc-700'}`}>
+                            {value || ''}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+      </div>
       )}
     </div>
   );
@@ -712,6 +885,7 @@ const sortedFiltered = [...filtered].sort((a, b) => {
   'Empresa',
   'Fecha de ingreso',
   'Última noche',
+  'Teléfono',
 ];
 
 const rows = sortedFiltered.map((stay, index) => [
@@ -723,6 +897,7 @@ const rows = sortedFiltered.map((stay, index) => [
   stay.empresa ?? '',
   formatDate(stay.check_in_date),
   stay.check_out_date ? formatDate(stay.check_out_date) : '',
+  stay.guests?.phone ?? '',
 ]);
 
     const csv = [headers, ...rows]
@@ -760,7 +935,7 @@ const rows = sortedFiltered.map((stay, index) => [
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h3 className="font-semibold text-gray-800 dark:text-zinc-100 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-blue-500" />
-            Huéspedes activos por fecha
+            Filtros de consulta
           </h3>
 
           <div className="flex items-center gap-3">
@@ -957,6 +1132,9 @@ const rows = sortedFiltered.map((stay, index) => [
   <th className="text-left px-5 py-3 font-semibold text-gray-600 dark:text-zinc-300 whitespace-nowrap">
     Última noche
   </th>
+  <th className="text-left px-5 py-3 font-semibold text-gray-600 dark:text-zinc-300 whitespace-nowrap">
+    Teléfono
+  </th>
 </tr>
               </thead>
 
@@ -1005,6 +1183,9 @@ const rows = sortedFiltered.map((stay, index) => [
                             year: 'numeric',
                           })
                         : 'Sin fecha'}
+                    </td>
+                    <td className="px-5 py-3 text-gray-500 dark:text-zinc-400 whitespace-nowrap">
+                      {stay.guests?.phone || '—'}
                     </td>
                   </tr>
                 ))}

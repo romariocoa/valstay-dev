@@ -76,6 +76,13 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
     : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400';
 
   const badgeLabel = isOverdue ? 'Pendiente' : isTodayDeparture ? 'Sale hoy' : 'Activo';
+  const workerTypeLabel = stay.worker_type === 'obrero'
+    ? 'Obrero'
+    : stay.worker_type === 'empleado'
+      ? 'Empleado'
+      : stay.worker_type === 'staff'
+        ? 'Staff'
+        : null;
 
   const handleCheckOut = async () => {
     try {
@@ -282,6 +289,12 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <div className="col-span-2 flex items-center gap-2 min-w-0">
               <Building2 className="w-4 h-4 shrink-0 text-blue-500" />
               <span className="text-blue-700 dark:text-blue-400 font-medium truncate">{stay.empresa}</span>
+              {workerTypeLabel && (
+                <>
+                  <span className="shrink-0 text-gray-300 dark:text-zinc-600">•</span>
+                  <span className="shrink-0 font-semibold text-gray-600 dark:text-zinc-300">{workerTypeLabel}</span>
+                </>
+              )}
             </div>
           )}
           <div className="col-span-2 flex items-center gap-2 min-w-0">

@@ -75,6 +75,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [exportOptions, setExportOptions] = useState<{ empresa: string; startDate: string; endDate: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   const [sidebarPinned, setSidebarPinned] = useState(true);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
@@ -945,7 +946,11 @@ const handleRefreshAll = async () => {
               rooms={rooms}
               canDelete={canDeleteHistory(currentUser)}
               canValorizacion={canExportValorizacion(currentUser) || demo}
-              onExportValorizacion={() => setShowExport(true)}
+              onExportValorizacion={(options) => {
+                if (!options) return;
+                setExportOptions(options);
+                setShowExport(true);
+              }}
             />
           )}
 
@@ -970,7 +975,13 @@ const handleRefreshAll = async () => {
       </main>
 
       {showExport && (
-        <ExportValorizacion tenantId={tenantId!} onClose={() => setShowExport(false)} />
+        <ExportValorizacion
+          tenantId={tenantId!}
+          initialEmpresa={exportOptions?.empresa}
+          initialStartDate={exportOptions?.startDate}
+          initialEndDate={exportOptions?.endDate}
+          onClose={() => { setShowExport(false); setExportOptions(null); }}
+        />
       )}
 
       {showCheckIn && (

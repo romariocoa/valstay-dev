@@ -8,6 +8,9 @@ import {
   BedSingle,
   ArrowDownToLine,
   CheckCircle,
+  HardHat,
+  Briefcase,
+  BadgeCheck,
 } from 'lucide-react';
 
 function localDateStr(d: Date): string {
@@ -36,17 +39,6 @@ const typeLabels: Record<Room['type'], string> = {
   lavanderia: 'LAVANDERÍA',
   almacen: 'ALMACÉN',
   tienda: 'TIENDA',
-};
-
-const roomDisplayName: Record<Room['type'], (n: string) => string> = {
-  single: () => '',
-  double: (n) => `Cuarto Doble ${n}`,
-  suite: (n) => `Suite ${n}`,
-  family: (n) => `Cuarto Familiar ${n}`,
-  sala: (n) => n,
-  lavanderia: (n) => n,
-  almacen: (n) => n,
-  tienda: (n) => n,
 };
 
 export function RoomCard({
@@ -111,8 +103,6 @@ export function RoomCard({
           ? 'En limpieza'
           : 'Mantenimiento';
 
-  const displayName = roomDisplayName[room.type](room.number);
-
   const guestNameParts = activeStay?.guests?.name
     ?.trim()
     .split(/\s+/)
@@ -120,6 +110,14 @@ export function RoomCard({
 
   const guestFirstNames = guestNameParts.slice(0, 2).join(' ');
   const guestLastNames = guestNameParts.slice(2).join(' ');
+
+  const workerTypeInfo = activeStay?.worker_type === 'obrero'
+    ? { label: 'Obrero', icon: HardHat }
+    : activeStay?.worker_type === 'empleado'
+      ? { label: 'Empleado', icon: Briefcase }
+      : activeStay?.worker_type === 'staff'
+        ? { label: 'Staff', icon: BadgeCheck }
+        : null;
 
   return (
     <div
@@ -152,12 +150,6 @@ export function RoomCard({
             {statusLabel}
           </span>
         </div>
-
-        {displayName && (
-          <p className="text-gray-500 dark:text-zinc-400 text-sm mt-1">
-            {displayName}
-          </p>
-        )}
 
         <p className="w-full text-center text-gray-800 dark:text-zinc-300 font-black text-xs tracking-widest mt-1">
           {typeLabels[room.type]}
@@ -204,6 +196,18 @@ export function RoomCard({
                   <span className="text-xs text-blue-700 dark:text-blue-400 font-medium text-center break-words">
                     {activeStay.empresa || 'Particular'}
                   </span>
+
+                  {workerTypeInfo && (() => {
+                    const WorkerIcon = workerTypeInfo.icon;
+                    return (
+                      <span className="group relative ml-2 inline-flex shrink-0 text-slate-500 dark:text-zinc-400" tabIndex={0} aria-label={`Tipo de huésped: ${workerTypeInfo.label}`}>
+                        <WorkerIcon className="h-4 w-4" />
+                        <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 dark:bg-white dark:text-slate-900">
+                          {workerTypeInfo.label}
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {isLeavingToday && (
