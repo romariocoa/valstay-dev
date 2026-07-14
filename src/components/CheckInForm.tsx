@@ -246,6 +246,10 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
       setError('Por favor complete todos los campos obligatorios');
       return;
     }
+    if (!/^\d{8}$/.test(dni)) {
+      setError('El DNI debe tener exactamente 8 dígitos');
+      return;
+    }
     if (checkOutDate <= checkInDate) {
       setError('La fecha de salida debe ser posterior a la de entrada (minimo 1 noche)');
       return;
@@ -503,9 +507,12 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                 <input
                   type="text"
                   value={dni}
-                  onChange={(e) => setDni(e.target.value)}
+                  onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  inputMode="numeric"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
                   className={`${inputBase} pl-10 pr-10`}
-                  placeholder="Ingrese DNI"
+                  placeholder="8 dígitos"
                   disabled={fieldDisabled}
                 />
                 {searchingDni && (
@@ -737,7 +744,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   loading ||
   !empresaSelected ||
   !roomId ||
-  !dni ||
+  dni.length !== 8 ||
   !name ||
   !checkInDate ||
   !checkOutDate ||
