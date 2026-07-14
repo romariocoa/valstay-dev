@@ -316,9 +316,9 @@ useEffect(() => {
     ).join('\n');
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(
-      'ValStay ·',
+      `${departuresForNotification.length} ${departuresForNotification.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy`,
       {
-        body: `${departuresForNotification.length} ${departuresForNotification.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
+        body: departureDetails,
         icon: '/MyHotel_logo_transparente.png',
         badge: '/MyHotel_logo_transparente.png',
         tag: `departures-${tenantId}-${todayForNotifications}`,
