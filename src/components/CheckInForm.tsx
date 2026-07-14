@@ -199,7 +199,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   const totalAmount = selectedRoom && nights > 0 ? effectivePrice * nights : null;
 
   const qrUrl = paymentMethod === 'yape' ? hotelConfig.yape_qr_url : paymentMethod === 'plin' ? hotelConfig.plin_qr_url : null;
-  const requiresReceipt = paymentMethod === 'yape' || paymentMethod === 'plin';
+  const supportsReceipt = paymentMethod === 'yape' || paymentMethod === 'plin';
 
   const handleReceipt = (file?: File) => {
     if (!file) return;
@@ -250,11 +250,6 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
       setError('La fecha de salida debe ser posterior a la de entrada (minimo 1 noche)');
       return;
     }
-    if (!hasEmpresa && requiresReceipt && !paymentReceipt) {
-      setError(`Carga la foto de la transferencia de ${paymentMethod === 'yape' ? 'Yape' : 'Plin'}.`);
-      return;
-    }
-
     if (submitting.current) return;
     submitting.current = true;
 
@@ -273,13 +268,23 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
         return;
       }
 
+      const { data: savedGuest, error: guestLookupError } = await getClient()
+        .from('guests')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('dni', dni)
+        .maybeSingle();
+
+      if (guestLookupError) throw guestLookupError;
+
       let guestId: string;
-      if (existingGuest) {
-        guestId = existingGuest.id;
-        await getClient()
+      if (savedGuest) {
+        guestId = savedGuest.id;
+        const { error: guestUpdateError } = await getClient()
           .from('guests')
           .update({ name, phone: phone || null, address: hasEmpresa ? null : (address || null) })
-          .eq('id', existingGuest.id);
+          .eq('id', savedGuest.id);
+        if (guestUpdateError) throw guestUpdateError;
       } else {
         const { data: newGuest, error: guestError } = await getClient()
           .from('guests')
@@ -304,7 +309,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
         empresa: hasEmpresa ? empresa : null,
         worker_type: hasEmpresa ? workerType : null,
         payment_method: hasEmpresa ? null : paymentMethod,
-        payment_receipt_url: !hasEmpresa && requiresReceipt ? paymentReceipt : null,
+        payment_receipt_url: !hasEmpresa && supportsReceipt && paymentReceipt ? paymentReceipt : null,
         tenant_id: tenantId,
       });
       if (stayError) throw stayError;
@@ -692,7 +697,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                   </button>;
                 })}
               </div>
-              {requiresReceipt && (
+              {supportsReceipt && (
                 <div className="space-y-3">
                   <div className="text-center rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
                     {qrUrl ? <img src={qrUrl} alt={`QR de ${paymentMethod}`} className="mx-auto w-52 h-52 object-contain rounded-lg" /> : (
@@ -701,7 +706,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                   </div>
                   <input ref={receiptFileRef} type="file" accept="image/*" className="hidden" onChange={e => { handleReceipt(e.target.files?.[0]); e.target.value = ''; }} />
                   <input ref={receiptCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { handleReceipt(e.target.files?.[0]); e.target.value = ''; }} />
-                  <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">Comprobante de transferencia *</p>
+                  <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">Comprobante de transferencia (opcional)</p>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => receiptFileRef.current?.click()} className="flex-1 flex justify-center items-center gap-2 py-2.5 border border-dashed border-blue-400 rounded-xl text-sm text-blue-600 dark:text-blue-400"><Upload className="w-4 h-4" />Subir foto</button>
                     <button type="button" onClick={() => receiptCameraRef.current?.click()} className="flex-1 flex justify-center items-center gap-2 py-2.5 border border-dashed border-blue-400 rounded-xl text-sm text-blue-600 dark:text-blue-400"><Camera className="w-4 h-4" />Tomar foto</button>
@@ -737,7 +742,6 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   !checkInDate ||
   !checkOutDate ||
   (hasEmpresa && !workerType)
-  || (!hasEmpresa && requiresReceipt && !paymentReceipt)
 }
               className="flex-1 py-3 bg-gray-900 dark:bg-zinc-700 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-zinc-600 transition-colors font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
             >
