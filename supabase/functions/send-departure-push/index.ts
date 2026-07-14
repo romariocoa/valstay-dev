@@ -29,6 +29,10 @@ function limaNow() {
   };
 }
 
+function notificationLine(value: string, maxLength = 60): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1).trimEnd()}…` : value;
+}
+
 Deno.serve(async request => {
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (request.headers.get('x-cron-secret') !== cronSecret) {
@@ -53,7 +57,7 @@ Deno.serve(async request => {
 
     const { data: stays, error: stayError } = await supabase
       .from('stays')
-      .select('id, empresa, rooms(number)')
+      .select('id, empresa, guests(name), rooms(number)')
       .eq('tenant_id', hotel.tenant_id)
       .in('status', ['active', 'baja'])
       .lte('check_out_date', lastCompletedNight);
@@ -87,9 +91,9 @@ Deno.serve(async request => {
     }
 
     let sentCount = 0;
-    const departureDetails = (stays ?? []).map(stay =>
-      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() || 'Particular'}`
-    ).join('\n');
+    const departureDetails = (stays ?? []).map(stay => notificationLine(
+      `${stay.rooms?.number ?? '—'} · ${stay.guests?.name?.trim() || 'Huésped'} · ${stay.empresa?.trim() || 'Particular'}`
+    )).join('\n');
     const payload = JSON.stringify({
       title: `${stays!.length} ${stays!.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy`,
       body: departureDetails,

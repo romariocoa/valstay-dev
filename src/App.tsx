@@ -72,6 +72,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function notificationLine(value: string, maxLength = 60): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1).trimEnd()}…` : value;
+}
+
 function notificationDepartureDate(stay: StayWithDetails): string {
   const departure = new Date(stay.check_out_date + 'T12:00:00');
   departure.setDate(departure.getDate() + 1);
@@ -311,9 +315,9 @@ useEffect(() => {
     const notificationKey = `departure_notification_${configuredTimeKey}_${tenantId}_${currentUser.id}_${todayForNotifications}`;
     if (localStorage.getItem(notificationKey)) return;
 
-    const departureDetails = departuresForNotification.map(stay =>
-      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() || 'Particular'}`
-    ).join('\n');
+    const departureDetails = departuresForNotification.map(stay => notificationLine(
+      `${stay.rooms?.number ?? '—'} · ${stay.guests?.name?.trim() || 'Huésped'} · ${stay.empresa?.trim() || 'Particular'}`
+    )).join('\n');
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(
       `${departuresForNotification.length} ${departuresForNotification.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy`,
