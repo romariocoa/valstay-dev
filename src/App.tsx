@@ -312,13 +312,13 @@ useEffect(() => {
     if (localStorage.getItem(notificationKey)) return;
 
     const departureDetails = departuresForNotification.map(stay =>
-      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() ? 'Empresa' : 'Particular'}`
+      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() || 'Particular'}`
     ).join('\n');
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(
-      `ValStay · ${departuresForNotification.length}`,
+      'ValStay ·',
       {
-        body: `${departuresForNotification.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
+        body: `${departuresForNotification.length} ${departuresForNotification.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
         icon: '/MyHotel_logo_transparente.png',
         badge: '/MyHotel_logo_transparente.png',
         tag: `departures-${tenantId}-${todayForNotifications}`,

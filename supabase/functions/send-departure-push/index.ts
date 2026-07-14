@@ -88,11 +88,11 @@ Deno.serve(async request => {
 
     let sentCount = 0;
     const departureDetails = (stays ?? []).map(stay =>
-      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() ? 'Empresa' : 'Particular'}`
+      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() || 'Particular'}`
     ).join('\n');
     const payload = JSON.stringify({
-      title: `ValStay · ${stays!.length}`,
-      body: `${stays!.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
+      title: 'ValStay ·',
+      body: `${stays!.length} ${stays!.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
       url: '/?section=stays',
       tag: `departures-${hotel.tenant_id}-${now.date}`,
     });
