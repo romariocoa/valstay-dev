@@ -53,7 +53,7 @@ Deno.serve(async request => {
 
     const { data: stays, error: stayError } = await supabase
       .from('stays')
-      .select('id, rooms(number)')
+      .select('id, empresa, rooms(number)')
       .eq('tenant_id', hotel.tenant_id)
       .in('status', ['active', 'baja'])
       .lte('check_out_date', lastCompletedNight);
@@ -87,10 +87,12 @@ Deno.serve(async request => {
     }
 
     let sentCount = 0;
-    const rooms = (stays ?? []).map(stay => `Hab. ${stay.rooms?.number ?? '—'}`).join(', ');
+    const departureDetails = (stays ?? []).map(stay =>
+      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() ? 'Empresa' : 'Particular'}`
+    ).join('\n');
     const payload = JSON.stringify({
-      title: `${stays!.length} salida${stays!.length === 1 ? '' : 's'} requiere${stays!.length === 1 ? '' : 'n'} atención`,
-      body: rooms,
+      title: 'ValStay',
+      body: `${stays!.length} huésped${stays!.length === 1 ? ' sale' : 'es salen'} hoy\n${departureDetails}`,
       url: '/?section=stays',
       tag: `departures-${hotel.tenant_id}-${now.date}`,
     });

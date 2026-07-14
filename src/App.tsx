@@ -311,12 +311,14 @@ useEffect(() => {
     const notificationKey = `departure_notification_${configuredTimeKey}_${tenantId}_${currentUser.id}_${todayForNotifications}`;
     if (localStorage.getItem(notificationKey)) return;
 
-    const roomNumbers = departuresForNotification.map(stay => `Hab. ${stay.rooms?.number ?? '—'}`).join(', ');
+    const departureDetails = departuresForNotification.map(stay =>
+      `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() ? 'Empresa' : 'Particular'}`
+    ).join('\n');
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(
-      `${departuresForNotification.length} salida${departuresForNotification.length === 1 ? '' : 's'} requiere${departuresForNotification.length === 1 ? '' : 'n'} atención`,
+      'ValStay',
       {
-        body: roomNumbers,
+        body: `${departuresForNotification.length} huésped${departuresForNotification.length === 1 ? ' sale' : 'es salen'} hoy\n${departureDetails}`,
         icon: '/MyHotel_logo_transparente.png',
         badge: '/MyHotel_logo_transparente.png',
         tag: `departures-${tenantId}-${todayForNotifications}`,
