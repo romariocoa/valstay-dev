@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Plus, Trash2, RefreshCw, X, User, Lock, Eye, EyeOff,
   CheckCircle, AlertCircle, ShieldCheck, Calendar, ChevronDown, ChevronRight,
-  UserPlus, Edit2, Save, Users, Link2, Copy,
+  UserPlus, Edit2, Save, Users, Link2, Copy, Phone,
 } from 'lucide-react';
 import {
   getTenants, createTenant, deleteTenant, Tenant,
@@ -451,13 +451,15 @@ export function TenantManager({ onLogout }: TenantManagerProps) {
                       </div>
                       <div>
                         <h3 className="text-white font-semibold">{tenant.name}</h3>
-                        <div className="flex items-center gap-3 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-3 mt-0.5">
                           <span className="text-zinc-600 text-xs font-mono">{tenant.slug}</span>
+                          {tenant.contactPhone && <><span className="text-zinc-700">·</span><span className="flex items-center gap-1 text-zinc-500 text-xs"><Phone className="h-3 w-3" />{tenant.contactPhone}</span></>}
                           <span className="text-zinc-700">·</span>
                           <div className="flex items-center gap-1 text-zinc-600 text-xs">
                             <Calendar className="w-3 h-3" />
                             {new Date(tenant.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
+                          {(tenant.status === 'trial' || tenant.planEndsAt) && <><span className="text-zinc-700">·</span><span className="flex items-center gap-1 text-amber-400/80 text-xs"><Calendar className="h-3 w-3" />{tenant.status === 'trial' ? 'Prueba hasta' : 'Plan hasta'} {new Date(tenant.status === 'trial' ? tenant.trialEndsAt : tenant.planEndsAt!).toLocaleDateString('es-ES')}</span></>}
                         </div>
                       </div>
                     </button>

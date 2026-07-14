@@ -33,11 +33,12 @@ export function TenantAdminPanel({ tenant, onChanged }: { tenant: Tenant; onChan
   };
 
   return <div className="border-t border-zinc-800 p-5 space-y-5">
-    <div className="grid gap-3 md:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-5">
       <div><label className="text-xs text-zinc-500">Estado</label><select className={input} value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value as Tenant['status'] })}>
         <option value="trial">Prueba</option><option value="active">Activo</option><option value="suspended">Suspendido</option><option value="expired">Vencido</option>
       </select></div>
       <div><label className="text-xs text-zinc-500">Fin de prueba</label><input className={input} type="date" value={draft.trialEndsAt?.slice(0, 10)} onChange={e => setDraft({ ...draft, trialEndsAt: `${e.target.value}T23:59:59-05:00` })} /></div>
+      <div><label className="text-xs text-zinc-500">Fin del plan</label><input className={input} type="date" value={draft.planEndsAt?.slice(0, 10) || ''} onChange={e => setDraft({ ...draft, planEndsAt: e.target.value ? `${e.target.value}T23:59:59-05:00` : null })} /></div>
       <div><label className="text-xs text-zinc-500">Plan</label><input className={input} value={draft.planName} onChange={e => setDraft({ ...draft, planName: e.target.value })} /></div>
       <div><label className="text-xs text-zinc-500">Motivo</label><input className={input} placeholder="Opcional" value={draft.suspensionReason || ''} onChange={e => setDraft({ ...draft, suspensionReason: e.target.value })} /></div>
     </div>

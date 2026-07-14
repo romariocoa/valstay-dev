@@ -28,7 +28,9 @@ export interface Tenant {
   createdAt: string;
   status: 'trial' | 'active' | 'suspended' | 'expired';
   trialEndsAt: string;
+  planEndsAt: string | null;
   planName: string;
+  contactPhone: string | null;
   suspensionReason: string | null;
 }
 
@@ -176,7 +178,9 @@ export async function getTenants(): Promise<Tenant[]> {
     createdAt: r.created_at,
     status: r.status,
     trialEndsAt: r.trial_ends_at,
+    planEndsAt: r.plan_ends_at,
     planName: r.plan_name,
+    contactPhone: r.contact_phone,
     suspensionReason: r.suspension_reason,
   }));
 }
@@ -239,7 +243,9 @@ export async function createTenant(
       createdAt: tenantData.created_at,
       status: tenantData.status,
       trialEndsAt: tenantData.trial_ends_at,
+      planEndsAt: tenantData.plan_ends_at,
       planName: tenantData.plan_name,
+      contactPhone: tenantData.contact_phone,
       suspensionReason: tenantData.suspension_reason,
     },
   };
@@ -252,6 +258,7 @@ export async function manageTenantAccess(tenant: Tenant): Promise<{ error?: stri
     p_session_token: session.sessionToken, p_tenant_id: tenant.id,
     p_status: tenant.status, p_trial_ends_at: tenant.trialEndsAt,
     p_plan_name: tenant.planName, p_reason: tenant.suspensionReason,
+    p_plan_ends_at: tenant.planEndsAt,
   });
   return error ? { error: error.message } : {};
 }
