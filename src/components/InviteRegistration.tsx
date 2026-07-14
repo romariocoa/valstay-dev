@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, CheckCircle, RefreshCw } from 'lucide-react';
+import { Building2, CheckCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { clearSession } from '../lib/auth';
 
@@ -7,6 +7,7 @@ export function InviteRegistration() {
   const token = new URLSearchParams(window.location.search).get('token');
   const [form, setForm] = useState({ hotel: '', name: '', phone: '', username: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const submit = async (e: React.FormEvent) => {
@@ -38,7 +39,18 @@ export function InviteRegistration() {
           <input required className={input} placeholder="Nombre del administrador" value={form.name} onChange={e => setForm({...form, name:e.target.value})}/>
           <input required type="tel" inputMode="numeric" pattern="[0-9]{9}" maxLength={9} className={input} placeholder="Celular (9 dígitos)" value={form.phone} onChange={e => setForm({...form, phone:e.target.value.replace(/\D/g, '').slice(0, 9)})}/>
           <input required className={input} placeholder="Usuario" value={form.username} onChange={e => setForm({...form, username:e.target.value})}/>
-          <input required minLength={5} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{5,}" title="Mínimo 5 caracteres, una mayúscula, una minúscula y un número. Se permiten signos." type="password" className={input} placeholder="Contraseña" value={form.password} onChange={e => setForm({...form, password:e.target.value})}/>
+          <div className="relative">
+            <input required minLength={5} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{5,}" title="Mínimo 5 caracteres, una mayúscula, una minúscula y un número. Se permiten signos." type={showPassword ? 'text' : 'password'} className={`${input} pr-12`} placeholder="Contraseña" value={form.password} onChange={e => setForm({...form, password:e.target.value})}/>
+            <button
+              type="button"
+              onClick={() => setShowPassword(value => !value)}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-500 transition-colors hover:text-white"
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
           <p className="text-xs text-slate-500">Mínimo 5 caracteres, con mayúscula, minúscula y número. Se permiten signos.</p>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 py-3.5 font-bold disabled:opacity-60">{loading && <RefreshCw className="h-4 w-4 animate-spin"/>}Crear cuenta</button>
