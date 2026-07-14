@@ -91,8 +91,8 @@ Deno.serve(async request => {
       `Habitación ${stay.rooms?.number ?? '—'} · ${stay.empresa?.trim() ? 'Empresa' : 'Particular'}`
     ).join('\n');
     const payload = JSON.stringify({
-      title: 'ValStay',
-      body: `${stays!.length} huésped${stays!.length === 1 ? ' sale' : 'es salen'} hoy\n${departureDetails}`,
+      title: `ValStay · ${stays!.length}`,
+      body: `${stays!.length === 1 ? 'huésped sale' : 'huéspedes salen'} hoy\n${departureDetails}`,
       url: '/?section=stays',
       tag: `departures-${hotel.tenant_id}-${now.date}`,
     });
