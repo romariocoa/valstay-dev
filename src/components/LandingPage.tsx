@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, BellRing, BedDouble, CheckCircle2, ChevronRight, CreditCard, FileText, LogIn, Monitor, MousePointer2, PackageOpen, Smartphone, Tablet, Users } from 'lucide-react';
+import { BarChart3, BellRing, BedDouble, CheckCircle2, ChevronRight, ClipboardList, Construction, CreditCard, FileText, LogIn, Monitor, MousePointer2, PackageOpen, Smartphone, Tablet, Users } from 'lucide-react';
 import { login } from '../lib/auth';
 
 export function LandingPage() {
@@ -196,10 +196,37 @@ export function LandingPage() {
       </section>
 
       <section className="px-5 pb-20">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.07] p-8 text-center sm:flex-row sm:text-left">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300"><PackageOpen className="h-8 w-8" /></div>
-          <div className="flex-1"><span className="text-xs font-black uppercase tracking-widest text-emerald-300">Próximamente</span><h2 className="mt-1 text-2xl font-black">Control de artículos de limpieza</h2><p className="mt-2 text-slate-300">Registra existencias, entradas y consumo de productos para habitaciones, lavandería y áreas comunes.</p></div>
-          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300">En desarrollo</span>
+        <div className="mx-auto grid max-w-6xl overflow-hidden rounded-[2rem] border border-amber-400/25 bg-slate-900 shadow-2xl shadow-amber-950/20 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="relative min-h-[340px] overflow-hidden lg:min-h-[500px]">
+            <img src="/control-limpieza-en-desarrollo.png" alt="Nuevo módulo de ValStay en construcción" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-slate-900" />
+            <div className="absolute bottom-5 left-5 flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/75 px-4 py-2 text-xs font-bold text-white backdrop-blur-md">
+              <Construction className="h-4 w-4 text-amber-300" />Estamos construyendo algo nuevo
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-center p-7 sm:p-10 lg:p-12">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-black uppercase tracking-[.22em] text-amber-300">Próximamente</span>
+              <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-200">En desarrollo</span>
+            </div>
+            <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl">Control de artículos de limpieza</h2>
+            <p className="mt-4 leading-7 text-slate-300">Registra existencias, entradas, consumos y reposiciones de productos para habitaciones, lavandería y áreas comunes.</p>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {[
+                { icon: BedDouble, title: 'Cambio de sábanas', text: 'Control por habitación y fecha.' },
+                { icon: PackageOpen, title: 'Papel y amenidades', text: 'Papel toalla, papel higiénico y otros.' },
+                { icon: ClipboardList, title: 'Entradas y consumo', text: 'Movimientos e inventario actualizado.' },
+                { icon: CheckCircle2, title: 'Reposición pendiente', text: 'Identifica lo que hace falta reponer.' },
+              ].map(({ icon: Icon, title, text }) => (
+                <div key={title} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/10 text-amber-300"><Icon className="h-5 w-5" /></div>
+                  <div><p className="text-sm font-bold text-white">{title}</p><p className="mt-1 text-xs leading-5 text-slate-400">{text}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     </main>
