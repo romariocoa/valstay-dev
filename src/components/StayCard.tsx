@@ -22,6 +22,18 @@ function effectiveDepartureDateStr(stay: { check_out_date: string }): string {
   return localDateStr(d);
 }
 
+function previousDateStr(date: string): string {
+  const d = new Date(date + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return localDateStr(d);
+}
+
+function nextDateStr(date: string): string {
+  const d = new Date(date + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return localDateStr(d);
+}
+
 function whatsappNumber(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   // Los celulares peruanos suelen guardarse localmente con 9 dígitos.
@@ -143,17 +155,20 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   };
 
   const handleEditDate = async () => {
-    if (!editDate || editDate === stay.check_out_date) return;
+    if (!editDate || editDate === departureDateStr) return;
     setEditDateLoading(true);
     try {
-      const updates: Record<string, unknown> = { check_out_date: editDate };
+      // The input uses the real departure date, while the database stores the
+      // final night slept. Convert only at the persistence boundary.
+      const newLastNight = previousDateStr(editDate);
+      const updates: Record<string, unknown> = { check_out_date: newLastNight };
       if (stay.total_amount != null) {
         const oldNights = Math.round(
           (new Date(stay.check_out_date + 'T12:00:00').getTime() -
            new Date(stay.check_in_date + 'T12:00:00').getTime()) / 86400000
         ) + 1;
         const newNights = Math.round(
-          (new Date(editDate + 'T12:00:00').getTime() -
+          (new Date(newLastNight + 'T12:00:00').getTime() -
            new Date(stay.check_in_date + 'T12:00:00').getTime()) / 86400000
         ) + 1;
         if (oldNights > 0) {
@@ -315,7 +330,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <input
               type="date"
               value={editDate}
-              min={stay.check_in_date}
+              min={nextDateStr(stay.check_in_date)}
               onChange={e => setEditDate(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
               autoFocus
@@ -323,7 +338,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <div className="flex gap-2">
               <button
                 onClick={handleEditDate}
-                disabled={!editDate || editDate === stay.check_out_date || editDateLoading}
+                disabled={!editDate || editDate === departureDateStr || editDateLoading}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
               >
                 {editDateLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -407,7 +422,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
           <div className="flex items-center gap-2 shrink-0">
             {!showEditDate && !showChangeRoom && (
               <button
-                onClick={() => { setShowEditDate(true); setEditDate(stay.check_out_date); }}
+                onClick={() => { setShowEditDate(true); setEditDate(departureDateStr); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-blue-400 text-blue-600 dark:text-blue-400 rounded-lg text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors font-semibold whitespace-nowrap"
               >
                 <CalendarClock className="w-3.5 h-3.5" />
