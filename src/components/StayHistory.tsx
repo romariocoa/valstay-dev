@@ -109,6 +109,23 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
       return localDateStr(date);
     },
   );
+  const valuationMonthGroups = valuationDays.reduce<Array<{ key: string; label: string; count: number }>>((groups, day) => {
+    const date = new Date(`${day}T12:00:00`);
+    const key = day.slice(0, 7);
+    const currentGroup = groups[groups.length - 1];
+
+    if (currentGroup?.key === key) {
+      currentGroup.count += 1;
+    } else {
+      groups.push({
+        key,
+        label: date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase(),
+        count: 1,
+      });
+    }
+
+    return groups;
+  }, []);
   const valuationGroups = new Map<string, typeof valuationEmpresaStays>();
   valuationEmpresaStays
     .filter(stay => clientFilter === 'all' || stay.empresa === clientFilter)
@@ -427,14 +444,20 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
                 <table className="w-full min-w-max text-[9px] leading-tight">
                   <thead className="bg-gray-50 dark:bg-zinc-800">
                     <tr className="border-b border-gray-200 dark:border-zinc-700">
-                      <th className="sticky left-0 z-10 w-9 min-w-9 bg-gray-50 px-1 py-2 text-center font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">N.°</th>
-                      <th className="sticky left-9 z-10 w-36 min-w-36 bg-gray-50 px-2 py-2 text-left font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">NOMBRE</th>
-                      <th className="w-20 min-w-20 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">DNI</th>
-                      <th className="w-16 min-w-16 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">CARGO</th>
+                      <th rowSpan={2} className="sticky left-0 z-10 w-9 min-w-9 bg-gray-50 px-1 py-2 text-center font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">N.°</th>
+                      <th rowSpan={2} className="sticky left-9 z-10 w-36 min-w-36 bg-gray-50 px-2 py-2 text-left font-bold text-gray-600 dark:bg-zinc-800 dark:text-zinc-300">NOMBRE</th>
+                      <th rowSpan={2} className="w-20 min-w-20 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">DNI</th>
+                      <th rowSpan={2} className="w-16 min-w-16 px-2 py-2 text-left font-bold text-gray-600 dark:text-zinc-300">CARGO</th>
+                      {valuationMonthGroups.map(group => (
+                        <th key={group.key} colSpan={group.count} className="border-l border-gray-200 px-1 py-1.5 text-center text-[8px] font-black tracking-wide text-emerald-700 dark:border-zinc-700 dark:text-emerald-400">
+                          {group.label}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-zinc-700">
                       {valuationDays.map(day => (
                         <th key={day} className="w-7 min-w-7 px-0.5 py-1.5 text-center font-bold text-gray-600 dark:text-zinc-300">
                           <span className="block">{day.slice(8, 10)}</span>
-                          <span className="block text-[7px] font-medium text-gray-400">/{day.slice(5, 7)}</span>
                         </th>
                       ))}
                     </tr>
