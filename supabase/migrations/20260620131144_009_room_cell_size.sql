@@ -1,0 +1,3 @@
+ALTER TABLE rooms
+  ADD COLUMN IF NOT EXISTS cell_width  integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS cell_height integer NOT NULL DEFAULT 1;

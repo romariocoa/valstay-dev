@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent iOS Safari auto-zoom on input focus (triggered when font-size < 16px) */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Normalize date inputs across browsers */
+input[type="date"] {
+  box-sizing: border-box;
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 80px;
+}
+
+/* Tema Puchi: base oscura del login con acentos cian y esmeralda. */
+html.puchi-theme {
+  color-scheme: dark;
+  --puchi-deep: #010203;
+  --puchi-surface: #030708;
+  --puchi-surface-2: #071012;
+  --puchi-surface-3: #0b1b1e;
+  --puchi-cyan: #22d3ee;
+  --puchi-emerald: #10b981;
+}
+
+html.puchi-theme body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(8, 145, 178, 0.07), transparent 27%),
+    radial-gradient(circle at 88% 86%, rgba(5, 150, 105, 0.05), transparent 25%),
+    linear-gradient(145deg, #040708 0%, var(--puchi-deep) 100%);
+  background-attachment: fixed;
+}
+
+html.puchi-theme [class*="dark:bg-zinc-950"] { background-color: rgba(1, 2, 3, 0.98) !important; }
+html.puchi-theme [class*="dark:bg-zinc-900"] { background-color: rgba(3, 7, 8, 0.98) !important; }
+html.puchi-theme [class*="dark:bg-zinc-800"] { background-color: rgba(7, 16, 18, 0.98) !important; }
+html.puchi-theme [class*="dark:bg-zinc-700"] { background-color: rgba(11, 27, 30, 0.98) !important; }
+html.puchi-theme [class*="dark:border-zinc-800"] { border-color: rgba(34, 211, 238, 0.14) !important; }
+html.puchi-theme [class*="dark:border-zinc-700"] { border-color: rgba(34, 211, 238, 0.24) !important; }
+html.puchi-theme [class*="dark:text-zinc-100"] { color: #ecfeff !important; }
+html.puchi-theme [class*="dark:text-zinc-300"] { color: #c7f5f8 !important; }
+html.puchi-theme [class*="dark:text-zinc-400"] { color: #8fcbd2 !important; }
+html.puchi-theme [class*="dark:text-zinc-500"] { color: #6099a4 !important; }
+
+/* Estados con contraste alto sobre el negro del tema Puchi. */
+html.puchi-theme [class*="dark:bg-green-900"] { background-color: rgba(5, 86, 48, 0.48) !important; }
+html.puchi-theme [class*="dark:border-green-800"],
+html.puchi-theme [class*="border-green-500"],
+html.puchi-theme [class*="border-green-600"] { border-color: #22c55e !important; }
+html.puchi-theme [class*="dark:text-green-400"],
+html.puchi-theme [class*="text-green-500"],
+html.puchi-theme [class*="text-green-600"] { color: #4ade80 !important; }
+
+html.puchi-theme [class*="dark:bg-blue-900"],
+html.puchi-theme [class*="dark:bg-blue-950"] { background-color: rgba(18, 73, 145, 0.52) !important; }
+html.puchi-theme [class*="dark:border-blue-800"],
+html.puchi-theme [class*="border-blue-500"],
+html.puchi-theme [class*="border-blue-600"] { border-color: #3b82f6 !important; }
+html.puchi-theme [class*="dark:text-blue-400"],
+html.puchi-theme [class*="text-blue-500"],
+html.puchi-theme [class*="text-blue-600"] { color: #60a5fa !important; }
+
+html.puchi-theme [class*="dark:bg-red-900"],
+html.puchi-theme [class*="dark:bg-red-950"] { background-color: rgba(127, 29, 29, 0.52) !important; }
+html.puchi-theme [class*="dark:border-red-800"],
+html.puchi-theme [class*="dark:border-red-900"],
+html.puchi-theme [class*="border-red-500"] { border-color: #ef4444 !important; }
+html.puchi-theme [class*="dark:text-red-400"],
+html.puchi-theme [class*="text-red-500"],
+html.puchi-theme [class*="text-red-600"] { color: #f87171 !important; }
+
+html.puchi-theme [class*="dark:bg-cyan-900"],
+html.puchi-theme [class*="dark:bg-cyan-950"] { background-color: rgba(8, 91, 110, 0.5) !important; }
+html.puchi-theme [class*="dark:border-cyan-800"],
+html.puchi-theme [class*="border-cyan-500"] { border-color: #22d3ee !important; }
+html.puchi-theme [class*="dark:text-cyan-400"],
+html.puchi-theme [class*="text-cyan-500"],
+html.puchi-theme [class*="text-cyan-600"] { color: #67e8f9 !important; }
+
+html.puchi-theme [class*="dark:bg-amber-900"] { background-color: rgba(120, 53, 15, 0.52) !important; }
+html.puchi-theme [class*="dark:border-amber-800"],
+html.puchi-theme [class*="border-amber-500"] { border-color: #f59e0b !important; }
+html.puchi-theme [class*="dark:text-amber-400"],
+html.puchi-theme [class*="text-amber-500"],
+html.puchi-theme [class*="text-amber-600"] { color: #fbbf24 !important; }
+
+html.puchi-theme aside,
+html.puchi-theme header {
+  backdrop-filter: blur(18px);
+}
+
+html.puchi-theme input:focus,
+html.puchi-theme select:focus,
+html.puchi-theme textarea:focus {
+  border-color: var(--puchi-cyan) !important;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.18) !important;
+}
+
+html.puchi-theme button[class*="bg-green-600"],
+html.puchi-theme a[class*="bg-green-600"] {
+  background: linear-gradient(135deg, #0891b2, var(--puchi-emerald)) !important;
+}
+
+html.puchi-theme ::selection {
+  background: rgba(34, 211, 238, 0.3);
+  color: #fff;
+}

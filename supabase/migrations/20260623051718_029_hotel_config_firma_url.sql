@@ -1,0 +1,1 @@
+ALTER TABLE hotel_config ADD COLUMN IF NOT EXISTS firma_url text;
