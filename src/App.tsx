@@ -59,7 +59,6 @@ function localTodayStr(): string {
 }
 
 function notificationDepartureDate(stay: StayWithDetails): string {
-  if (stay.empresa) return stay.check_out_date;
   const departure = new Date(stay.check_out_date + 'T12:00:00');
   departure.setDate(departure.getDate() + 1);
   return [departure.getFullYear(), String(departure.getMonth() + 1).padStart(2, '0'), String(departure.getDate()).padStart(2, '0')].join('-');
@@ -493,10 +492,8 @@ const handleRefreshAll = async () => {
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
   })();
 
-  // For particular stays, check_out_date is stored as last night; departure = check_out_date + 1.
-  // For empresa stays, check_out_date is the effective departure date.
+  // check_out_date always stores the last night slept; departure is the next day.
   function stayDepartureDateStr(s: StayWithDetails): string {
-    if (s.empresa) return s.check_out_date;
     const d = new Date(s.check_out_date + 'T12:00:00');
     d.setDate(d.getDate() + 1);
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');

@@ -14,7 +14,6 @@ interface RoomManagerProps {
 
 const roomTypes = [
   { value: 'single', label: 'Individual', capacity: 1 },
-  { value: 'double', label: 'Doble',      capacity: 2 },
   { value: 'suite',  label: 'Suite',      capacity: 4 },
   { value: 'family', label: 'Familiar',   capacity: 5 },
 ];
@@ -561,6 +560,9 @@ function RoomForm({ rooms, floors, room, onClose, onSave, loading }: RoomFormPro
               onChange={(e) => setType(e.target.value as Room['type'])}
               className={`w-full ${inputBase}`}
             >
+              {room?.type === 'double' && (
+                <option value="double">Doble (tipo existente)</option>
+              )}
               {roomTypes.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}

@@ -5,6 +5,7 @@ import {
   Eraser, MousePointer, Save,
   DoorOpen, ArrowUpDown, Trash2, Move, RotateCw,
   Plus, Minus, X, Loader2, LogIn, LogOut,
+  Building2, BedDouble, Maximize2,
 } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -20,8 +21,7 @@ function localDateStr(d: Date): string {
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 }
 
-function effectiveDepartureDateStr(stay: { check_out_date: string; empresa: string | null }): string {
-  if (stay.empresa) return stay.check_out_date;
+function effectiveDepartureDateStr(stay: { check_out_date: string }): string {
   const d = new Date(stay.check_out_date + 'T12:00:00');
   d.setDate(d.getDate() + 1);
   return localDateStr(d);
@@ -92,7 +92,6 @@ const SPACE_TYPES: { value: Room['type']; label: string; capacity: number; price
   { value: 'lavanderia', label: 'Lavanderia',  capacity: 0,  price: 0 },
   { value: 'almacen',    label: 'Almacen',     capacity: 0,  price: 0 },
   { value: 'single',     label: 'Individual',  capacity: 1,  price: 80 },
-  { value: 'double',     label: 'Doble',       capacity: 2,  price: 120 },
   { value: 'suite',      label: 'Suite',       capacity: 4,  price: 250 },
   { value: 'family',     label: 'Familiar',    capacity: 5,  price: 200 },
 ];
@@ -1097,13 +1096,30 @@ useEffect(() => {
   );
 return (
   <div
-    className="space-y-4 select-none"
+    className="space-y-4 select-none rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-3 shadow-sm sm:p-5 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950"
     onMouseUp={handleMouseUp}
     onMouseLeave={handleMouseUp}
   >
+    <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
+      <div className="flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-300 dark:bg-cyan-600 dark:shadow-none">
+          <Building2 className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-400">Vista operativa</p>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white">Plano del hotel</h2>
+          <p className="text-xs text-slate-500 dark:text-zinc-400">Consulta el estado de cada espacio y gestiona ingresos o salidas.</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-zinc-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"><BedDouble className="h-3.5 w-3.5 text-cyan-600" />{floorRooms.filter(room => GUEST_TYPES.has(room.type)).length} habitaciones</span>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">Piso {floor ?? '—'}</span>
+      </div>
+    </div>
+
     {/* ── Top bar ── */}
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+    <div className="flex items-center gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
+      <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl overflow-hidden p-1 dark:border-zinc-700 dark:bg-zinc-800">
         <button
           type="button"
           onClick={() => {
@@ -1111,7 +1127,7 @@ return (
             setSelectedRoom(null);
           }}
           disabled={floorIdx === 0}
-          className="p-2.5 hover:bg-gray-50 disabled:opacity-30"
+          className="rounded-lg p-2 hover:bg-white disabled:opacity-30 dark:hover:bg-zinc-700"
         >
           <ChevronLeft className="w-4 h-4 text-gray-600" />
         </button>
@@ -1124,10 +1140,10 @@ return (
               setFloorIdx(i);
               setSelectedRoom(null);
             }}
-            className={`px-3 py-2.5 text-sm font-semibold transition-colors ${
+            className={`rounded-lg px-3.5 py-2 text-sm font-bold transition-all ${
               i === floorIdx
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-slate-900 text-white shadow-md dark:bg-cyan-600'
+                : 'text-slate-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700'
             }`}
           >
             P{f}
@@ -1141,13 +1157,14 @@ return (
             setSelectedRoom(null);
           }}
           disabled={floorIdx === floors.length - 1}
-          className="p-2.5 hover:bg-gray-50 disabled:opacity-30"
+          className="rounded-lg p-2 hover:bg-white disabled:opacity-30 dark:hover:bg-zinc-700"
         >
           <ChevronRight className="w-4 h-4 text-gray-600" />
         </button>
       </div>
 
-      <div className="px-2.5 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm text-xs text-gray-500 font-medium hidden sm:block">
+      <div className="hidden items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 sm:flex dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+        <Maximize2 className="h-3.5 w-3.5" />
         {gridCols} × {gridRows}
       </div>
 
@@ -1161,7 +1178,7 @@ return (
     setExpandedPlan(value => !value);
     setSelectedRoom(null);
   }}
-  className="hidden lg:flex items-center gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 shadow-sm"
+  className="hidden lg:flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
 >
   {expandedPlan ? (
     <Minus className="w-4 h-4" />
@@ -1176,7 +1193,7 @@ return (
               <button
                 type="button"
                 onClick={enterEdit}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-medium shadow-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-cyan-700 text-sm font-bold shadow-lg shadow-slate-200 transition-all dark:bg-cyan-600 dark:shadow-none dark:hover:bg-cyan-500"
               >
                 <Pencil className="w-4 h-4" />
                 <span>Editar plano</span>
@@ -1452,19 +1469,19 @@ return (
     {/* ── VIEW MODE: vista normal o ampliada dentro de la sección ── */}
 {!editMode && (
   <div
-    className={`w-full rounded-2xl border border-gray-200 shadow-sm bg-white ${
+    className={`relative w-full rounded-3xl border border-slate-200 bg-slate-100/70 p-2 shadow-inner dark:border-zinc-700 dark:bg-zinc-900 ${
       expandedPlan
         ? 'overflow-auto'
         : 'overflow-hidden'
     }`}
   >
     {loadingElems ? (
-      <div className="flex items-center justify-center h-64 bg-white">
+      <div className="flex items-center justify-center h-64 rounded-2xl bg-white dark:bg-zinc-900">
         <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
       </div>
     ) : expandedPlan ? (
       <div
-        className="flex justify-center p-4"
+        className="flex justify-center rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-950"
         style={{
           minHeight: Math.min(gridH, 850),
         }}
@@ -1482,6 +1499,7 @@ return (
     ) : (
       <div
         ref={viewContainerRef}
+        className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-zinc-950"
         style={{
           height: gridH * viewScale,
         }}
@@ -2156,9 +2174,9 @@ function RoomDetailCard({ room, stay, onCheckIn, onCheckOut, onClose }: {
             <p>DNI: {stay.guests.dni}</p>
             {(stay.empresa || salenHoy) && <p>Empresa: {stay.empresa || 'Particular'}</p>}
             <p>
-              {new Date(stay.check_in_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+              {new Date(stay.check_in_date + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
               {' — '}
-              {new Date(stay.check_out_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+              {new Date(effectiveDepartureDateStr(stay) + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
             </p>
           </>
         )}
