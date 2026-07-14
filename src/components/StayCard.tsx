@@ -330,7 +330,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <input
               type="date"
               value={editDate}
-              min={nextDateStr(stay.check_in_date)}
+              min={nextDateStr(todayStr)}
               onChange={e => setEditDate(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
               autoFocus
@@ -338,7 +338,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <div className="flex gap-2">
               <button
                 onClick={handleEditDate}
-                disabled={!editDate || editDate === departureDateStr || editDateLoading}
+                disabled={!editDate || editDate <= todayStr || editDate === departureDateStr || editDateLoading}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
               >
                 {editDateLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

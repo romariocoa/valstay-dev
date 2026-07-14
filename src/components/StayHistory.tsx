@@ -44,6 +44,16 @@ function valuationFutureLimitStr(): string {
   return localDateStr(date);
 }
 
+function effectiveValuationEnd(stay: { check_out_date?: string | null; status?: string | null }): string | null {
+  const scheduledLastNight = stay.check_out_date?.slice(0, 10) ?? null;
+  if (stay.status !== 'active' && stay.status !== 'baja') return scheduledLastNight;
+
+  const lastCompletedNight = lastCompletedNightStr();
+  return !scheduledLastNight || scheduledLastNight < lastCompletedNight
+    ? lastCompletedNight
+    : scheduledLastNight;
+}
+
 interface StayHistoryProps {
   tenantId: string;
   rooms: Room[];
@@ -143,7 +153,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     const first = group[0];
     const values = valuationDays.map(day => group.some(stay => {
       const checkIn = stay.check_in_date?.slice(0, 10);
-      const checkOut = stay.check_out_date?.slice(0, 10);
+      const checkOut = effectiveValuationEnd(stay);
       const bajaStart = stay.baja_start_date?.slice(0, 10);
       const bajaEnd = stay.baja_end_date?.slice(0, 10);
       if (!checkIn || day < checkIn || (checkOut && day > checkOut)) return false;
@@ -846,7 +856,7 @@ const handleSort = (field: SortField) => {
     ? reportStays
         .filter(stay => {
           const checkIn = stay.check_in_date?.slice(0, 10);
-          const checkOut = stay.check_out_date?.slice(0, 10);
+          const checkOut = effectiveValuationEnd(stay);
           const bajaStart = stay.baja_start_date?.slice(0, 10);
           const bajaEnd = stay.baja_end_date?.slice(0, 10);
 

@@ -85,13 +85,14 @@ async function fetchStays(empresa: string, startDate: string, endDate: string, t
     .in('status', ['active', 'baja', 'completed'])
     .eq('empresa', empresa)
     .lte('check_in_date', endDate)
-    .or(`check_out_date.gte.${startDate},check_out_date.is.null`)
+    .or(`check_out_date.gte.${startDate},check_out_date.is.null,status.in.(active,baja)`)
     .order('check_in_date', { ascending: true });
 }
 
 type WorkerType = 'obrero' | 'empleado' | 'staff';
 
 type StayRow = {
+  status?: 'active' | 'baja' | 'completed' | string | null;
   check_in_date: string;
   check_out_date: string | null;
   baja_start_date: string | null;
@@ -110,6 +111,10 @@ function buildDataRows(
   days: Date[],
   tarifas: Record<WorkerType, number>,
 ) {
+  const lastCompletedNight = new Date();
+  lastCompletedNight.setDate(lastCompletedNight.getDate() - 1);
+  lastCompletedNight.setHours(12, 0, 0, 0);
+  const lastCompletedNightDate = lastCompletedNight;
   /*
    * Se agrupa por DNI + cargo.
    * Esto evita mezclar en una misma fila estancias del mismo huésped
@@ -139,9 +144,13 @@ function buildDataRows(
     const dayVals = days.map(day => {
       for (const stay of guestStays) {
         const checkIn = toDateOnly(stay.check_in_date);
-        const checkOut = stay.check_out_date
+        const scheduledCheckOut = stay.check_out_date
           ? toDateOnly(stay.check_out_date)
           : null;
+        const checkOut = (stay.status === 'active' || stay.status === 'baja') &&
+          (!scheduledCheckOut || scheduledCheckOut < lastCompletedNightDate)
+          ? lastCompletedNightDate
+          : scheduledCheckOut;
 
         const bajaStart = stay.baja_start_date
           ? toDateOnly(stay.baja_start_date)
