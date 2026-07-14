@@ -63,12 +63,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-between py-10 px-4 overflow-hidden"
       style={{
-        background: 'radial-gradient(circle at 16% 12%, #164e63 0%, transparent 32%), radial-gradient(circle at 84% 82%, #14532d 0%, transparent 30%), linear-gradient(145deg, #111827 0%, #0f172a 48%, #07131a 100%)',
+        background: 'radial-gradient(circle at 16% 12%, #082f3a 0%, transparent 30%), radial-gradient(circle at 84% 82%, #062d1d 0%, transparent 28%), linear-gradient(145deg, #050708 0%, #020405 52%, #000101 100%)',
       }}>
 
-      <div className="pointer-events-none absolute -left-24 top-[18%] h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 bottom-[12%] h-80 w-80 rounded-full bg-emerald-400/15 blur-3xl" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.08]"
+      <div className="pointer-events-none absolute -left-24 top-[18%] h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-[12%] h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.045]"
         style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.18) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-sm">
@@ -94,7 +94,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         </div>
 
         {/* Card */}
-        <div className="w-full rounded-2xl border border-white/15 bg-slate-950/70 backdrop-blur-xl shadow-2xl shadow-cyan-950/50 overflow-hidden">
+        <div className="w-full rounded-2xl border border-white/10 bg-black/85 backdrop-blur-xl shadow-2xl shadow-black/80 overflow-hidden">
           <div className="px-8 pt-8 pb-6">
             <h2 className="text-2xl font-bold text-white text-center mb-1">Bienvenido</h2>
             <p className="text-zinc-500 text-sm text-center mb-7">Inicia sesión para continuar</p>
@@ -111,7 +111,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                     onChange={e => setUsername(e.target.value)}
                     placeholder="Nombre de usuario"
                     autoComplete="username"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-xl text-sm bg-zinc-800/80 border border-zinc-700/60 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                    className="w-full pl-12 pr-4 py-3.5 rounded-xl text-sm bg-zinc-950/90 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-800 transition-colors"
                   />
                 </div>
               </div>
@@ -127,7 +127,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete="current-password"
-                    className="w-full pl-12 pr-12 py-3.5 rounded-xl text-sm bg-zinc-800/80 border border-zinc-700/60 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                    className="w-full pl-12 pr-12 py-3.5 rounded-xl text-sm bg-zinc-950/90 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-800 transition-colors"
                   />
                   <button
                     type="button"

@@ -33,26 +33,26 @@ input[type="date"]::-webkit-date-and-time-value {
 /* Tema Puchi: base oscura del login con acentos cian y esmeralda. */
 html.puchi-theme {
   color-scheme: dark;
-  --puchi-deep: #010203;
-  --puchi-surface: #030708;
-  --puchi-surface-2: #071012;
-  --puchi-surface-3: #0b1b1e;
+  --puchi-deep: #000101;
+  --puchi-surface: #010303;
+  --puchi-surface-2: #030808;
+  --puchi-surface-3: #061112;
   --puchi-cyan: #22d3ee;
   --puchi-emerald: #10b981;
 }
 
 html.puchi-theme body {
   background:
-    radial-gradient(circle at 12% 8%, rgba(8, 145, 178, 0.07), transparent 27%),
-    radial-gradient(circle at 88% 86%, rgba(5, 150, 105, 0.05), transparent 25%),
-    linear-gradient(145deg, #040708 0%, var(--puchi-deep) 100%);
+    radial-gradient(circle at 12% 8%, rgba(8, 145, 178, 0.045), transparent 25%),
+    radial-gradient(circle at 88% 86%, rgba(5, 150, 105, 0.035), transparent 23%),
+    linear-gradient(145deg, #010303 0%, var(--puchi-deep) 100%);
   background-attachment: fixed;
 }
 
-html.puchi-theme [class*="dark:bg-zinc-950"] { background-color: rgba(1, 2, 3, 0.98) !important; }
-html.puchi-theme [class*="dark:bg-zinc-900"] { background-color: rgba(3, 7, 8, 0.98) !important; }
-html.puchi-theme [class*="dark:bg-zinc-800"] { background-color: rgba(7, 16, 18, 0.98) !important; }
-html.puchi-theme [class*="dark:bg-zinc-700"] { background-color: rgba(11, 27, 30, 0.98) !important; }
+html.puchi-theme [class*="dark:bg-zinc-950"] { background-color: rgba(0, 1, 1, 0.99) !important; }
+html.puchi-theme [class*="dark:bg-zinc-900"] { background-color: rgba(1, 3, 3, 0.99) !important; }
+html.puchi-theme [class*="dark:bg-zinc-800"] { background-color: rgba(3, 8, 8, 0.99) !important; }
+html.puchi-theme [class*="dark:bg-zinc-700"] { background-color: rgba(6, 17, 18, 0.99) !important; }
 html.puchi-theme [class*="dark:border-zinc-800"] { border-color: rgba(34, 211, 238, 0.14) !important; }
 html.puchi-theme [class*="dark:border-zinc-700"] { border-color: rgba(34, 211, 238, 0.24) !important; }
 html.puchi-theme [class*="dark:text-zinc-100"] { color: #ecfeff !important; }
