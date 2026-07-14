@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { login, AppUser, getLastLoginError } from '../lib/auth';
+import { login, AppUser, getLastBlockedHotel, getLastLoginError } from '../lib/auth';
 
 const SUPPORT_WHATSAPP = import.meta.env.VITE_SUPPORT_WHATSAPP || '51950336798';
 
@@ -17,6 +17,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [showPass, setShowPass] = useState(false);
   const [error, setError]       = useState('');
   const [accessBlocked, setAccessBlocked] = useState(false);
+  const [blockedHotel, setBlockedHotel] = useState('');
   const [loading, setLoading]   = useState(false);
  const [rememberUser, setRememberUser] = useState(() => {
 
@@ -39,6 +40,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   setError('');
   setAccessBlocked(false);
+  setBlockedHotel('');
   setLoading(true);
 
   const user = await login(username, password);
@@ -48,6 +50,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   if (!user) {
     const blocked = getLastLoginError() === 'blocked';
     setAccessBlocked(blocked);
+    setBlockedHotel(blocked ? getLastBlockedHotel() : '');
     setError(blocked
       ? 'El acceso de este hotel está vencido o suspendido. Comunícate con soporte.'
       : 'Usuario o contraseña incorrectos');
@@ -166,7 +169,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   </div>
                   {accessBlocked && (
                     <a
-                      href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(`Hola, necesito ayuda con el acceso vencido o suspendido de mi hotel en ValStay. Mi usuario es: ${username.trim() || 'sin indicar'}.`)}`}
+                      href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(`Hola, necesito ayuda con el acceso vencido o suspendido de mi hotel en ValStay. Mi hotel es: ${blockedHotel || 'sin indicar'}.`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-500"

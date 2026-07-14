@@ -42,16 +42,21 @@ export interface TenantMessage {
 
 const SESSION_KEY = 'hotel_session';
 let lastLoginError: 'credentials' | 'blocked' = 'credentials';
+let lastBlockedHotel = '';
 export function getLastLoginError() { return lastLoginError; }
+export function getLastBlockedHotel() { return lastBlockedHotel; }
 
 export async function login(username: string, password: string): Promise<AppUser | null> {
+  lastBlockedHotel = '';
   const { data, error } = await supabase.rpc('login_user', {
     p_username: username.toLowerCase().trim(),
     p_password: password,
   });
 
   if (error || !data || data.length === 0) {
+    const blockedMatch = error?.message?.match(/tenant_bloqueado:(.+)$/);
     lastLoginError = error?.message?.includes('tenant_bloqueado') ? 'blocked' : 'credentials';
+    lastBlockedHotel = blockedMatch?.[1]?.trim() ?? '';
     return null;
   }
 
