@@ -38,6 +38,12 @@ function lastCompletedNightStr(): string {
   return localDateStr(date);
 }
 
+function valuationFutureLimitStr(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 31);
+  return localDateStr(date);
+}
+
 interface StayHistoryProps {
   tenantId: string;
   rooms: Room[];
@@ -96,8 +102,8 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     ? 'Selecciona ambas fechas.'
     : valuationStart > valuationEnd
       ? 'La fecha inicial no puede ser posterior a la fecha final.'
-      : valuationEnd > lastCompletedNightStr()
-        ? 'La fecha final máxima es la última noche completada: ayer.'
+      : valuationEnd > valuationFutureLimitStr()
+        ? 'Para pruebas, la fecha final máxima es 31 días después de hoy.'
         : valuationDayDifference > 30
           ? 'El rango máximo permitido es de 31 días.'
           : '';
@@ -408,7 +414,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
                 <input
                   type="date"
                   value={valuationStart}
-                  max={lastCompletedNightStr()}
+                  max={valuationFutureLimitStr()}
                   onChange={event => setValuationStart(event.target.value)}
                   className={`w-full px-3 ${inputCls}`}
                 />
@@ -419,7 +425,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
                   type="date"
                   value={valuationEnd}
                   min={valuationStart}
-                  max={lastCompletedNightStr()}
+                  max={valuationFutureLimitStr()}
                   onChange={event => setValuationEnd(event.target.value)}
                   className={`w-full px-3 ${inputCls}`}
                 />
