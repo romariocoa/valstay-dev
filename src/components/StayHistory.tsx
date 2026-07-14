@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStayHistory } from '../hooks/useData';
+import { useStayHistory, useStays } from '../hooks/useData';
 import { Room, getClient } from '../lib/supabase';
 import {
   Calendar,
@@ -50,6 +50,7 @@ type Tab = 'particulares' | 'empresas' | 'reporte_empresa';
 
 export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacion = false, onExportValorizacion }: StayHistoryProps) {
   const { stays, loading, refetch } = useStayHistory(tenantId);
+  const { stays: allStays, loading: valuationLoading } = useStays(tenantId);
   const [tab, setTab] = useState<Tab>('reporte_empresa');
 
   // Shared filters
@@ -74,13 +75,18 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
 
   const floors = [...new Set(rooms.map(r => r.floor))].sort((a, b) => a - b);
 
+  const valuationStays = allStays.filter(stay =>
+    stay.status === 'active' || stay.status === 'baja' || stay.status === 'completed'
+  );
+
   const empresas = [...new Set(
-    stays.filter(s => s.empresa).map(s => s.empresa as string)
+    valuationStays.filter(s => s.empresa).map(s => s.empresa as string)
   )].sort((a, b) => a.localeCompare(b, 'es'));
 
   // Base partition
   const particulares = stays.filter(s => !s.empresa);
   const empresaStays = stays.filter(s => !!s.empresa);
+  const valuationEmpresaStays = valuationStays.filter(s => !!s.empresa);
   const valuationDayDifference = valuationStart && valuationEnd
     ? Math.round((new Date(`${valuationEnd}T12:00:00`).getTime() - new Date(`${valuationStart}T12:00:00`).getTime()) / 86400000)
     : -1;
@@ -103,8 +109,8 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
       return localDateStr(date);
     },
   );
-  const valuationGroups = new Map<string, typeof empresaStays>();
-  empresaStays
+  const valuationGroups = new Map<string, typeof valuationEmpresaStays>();
+  valuationEmpresaStays
     .filter(stay => clientFilter === 'all' || stay.empresa === clientFilter)
     .forEach(stay => {
       const key = `${stay.guests?.dni ?? stay.guest_id}-${stay.worker_type ?? 'sin-cargo'}`;
@@ -412,6 +418,8 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
 
             {valuationError ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">{valuationError}</div>
+            ) : valuationLoading ? (
+              <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400 dark:border-zinc-700 dark:text-zinc-500">Cargando valorización...</div>
             ) : valuationRows.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400 dark:border-zinc-700 dark:text-zinc-500">No existen noches registradas para este rango y empresa.</div>
             ) : (
