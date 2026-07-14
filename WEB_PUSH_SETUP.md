@@ -68,7 +68,7 @@ Agrega este encabezado usando el mismo secreto del paso 3:
 x-cron-secret: SECRETO_LARGO_ALEATORIO
 ```
 
-La función compara la hora actual de Lima con el horario de cada hotel. El registro `push_delivery_log` evita envíos duplicados durante el mismo día.
+La función compara el horario configurado con la hora local de Perú (`America/Lima`, formato de 24 horas). El registro `push_delivery_log` evita envíos duplicados durante el mismo día y solo se conserva cuando existía una salida para notificar.
 
 ## 7. Registrar dispositivos
 

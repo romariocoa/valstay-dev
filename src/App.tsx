@@ -91,6 +91,8 @@ function App() {
   );
   const [receptionistNotificationsOpen, setReceptionistNotificationsOpen] = useState(false);
   const [pushSubscriptionActive, setPushSubscriptionActive] = useState(false);
+  const [pushSubscriptionLoading, setPushSubscriptionLoading] = useState(false);
+  const [pushSubscriptionError, setPushSubscriptionError] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [guestSearch, setGuestSearch] = useState('');
   const [showDepartureCards, setShowDepartureCards] = useState(true);
@@ -324,55 +326,71 @@ useEffect(() => {
   }, [notificationClock, notificationPermission, stays, tenantId, currentUser]);
 
   const requestBrowserNotifications = async () => {
-    if (!('Notification' in window)) return;
-    if (notificationOptOutKey) localStorage.removeItem(notificationOptOutKey);
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    if (permission === 'granted') {
+    setPushSubscriptionError('');
+    try {
+      if (!('Notification' in window)) throw new Error('Este navegador no admite notificaciones.');
+      if (notificationOptOutKey) localStorage.removeItem(notificationOptOutKey);
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission !== 'granted') {
+        throw new Error('El navegador no concedió permiso para mostrar notificaciones.');
+      }
       await registerWebPushSubscription();
       await showBrowserDepartureNotification();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo activar este dispositivo.';
+      setPushSubscriptionError(message);
+      setPushSubscriptionActive(false);
     }
   };
 
   const registerWebPushSubscription = async () => {
     const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY;
     if (!currentUser || !('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
-    if (notificationOptOutKey && localStorage.getItem(notificationOptOutKey) === 'true') {
-      setPushSubscriptionActive(false);
-      return;
-    }
-    if (!publicKey) {
-      // Notification permission alone is not a server-side Web Push subscription.
-      setPushSubscriptionActive(false);
-      return;
-    }
+    setPushSubscriptionLoading(true);
+    try {
+      if (notificationOptOutKey && localStorage.getItem(notificationOptOutKey) === 'true') {
+        setPushSubscriptionActive(false);
+        return;
+      }
+      if (!publicKey) {
+        throw new Error('La clave pública Web Push no está configurada en este despliegue.');
+      }
 
-    const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        throw new Error('El navegador creó una suscripción incompleta.');
+      }
+      const { error } = await getClient().rpc('register_push_subscription', {
+        p_session_token: currentUser.sessionToken,
+        p_endpoint: json.endpoint,
+        p_p256dh: json.keys.p256dh,
+        p_auth: json.keys.auth,
+        p_user_agent: navigator.userAgent,
       });
+      if (error) throw error;
+      setPushSubscriptionError('');
+      setPushSubscriptionActive(true);
+    } finally {
+      setPushSubscriptionLoading(false);
     }
-
-    const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
-    const { error } = await getClient().rpc('register_push_subscription', {
-      p_session_token: currentUser.sessionToken,
-      p_endpoint: json.endpoint,
-      p_p256dh: json.keys.p256dh,
-      p_auth: json.keys.auth,
-      p_user_agent: navigator.userAgent,
-    });
-    if (error) throw error;
-    setPushSubscriptionActive(true);
   };
 
   useEffect(() => {
     if (notificationPermission !== 'granted' || !currentUser || currentUser.role === 'demo') return;
     registerWebPushSubscription().catch(error => {
       console.error('No se pudo registrar este dispositivo para Web Push:', error);
+      setPushSubscriptionError(error instanceof Error ? error.message : 'No se pudo registrar este dispositivo.');
+      setPushSubscriptionActive(false);
     });
   // Se vuelve a registrar al cambiar la sesión o el permiso del dispositivo.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,23 +421,31 @@ useEffect(() => {
   };
 
   const disableDeviceNotifications = async () => {
+    setPushSubscriptionLoading(true);
+    setPushSubscriptionError('');
     if (notificationOptOutKey) localStorage.setItem(notificationOptOutKey, 'true');
 
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription && currentUser) {
-        const { error } = await getClient().rpc('unregister_push_subscription', {
-          p_session_token: currentUser.sessionToken,
-          p_endpoint: subscription.endpoint,
-        });
-        if (error) console.error('No se pudo retirar la suscripción del servidor:', error);
-        await subscription.unsubscribe();
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription && currentUser) {
+          const { error } = await getClient().rpc('unregister_push_subscription', {
+            p_session_token: currentUser.sessionToken,
+            p_endpoint: subscription.endpoint,
+          });
+          if (error) throw error;
+          await subscription.unsubscribe();
+        }
       }
-    }
 
-    await clearLocalNotifications();
-    setPushSubscriptionActive(false);
+      await clearLocalNotifications();
+      setPushSubscriptionActive(false);
+    } catch (error) {
+      setPushSubscriptionError(error instanceof Error ? error.message : 'No se pudo desactivar este dispositivo.');
+    } finally {
+      setPushSubscriptionLoading(false);
+    }
   };
 
 
@@ -762,16 +788,24 @@ if (checkSuperuser(currentUser)) {
                     <button
                       type="button"
                       onClick={pushSubscriptionActive ? disableDeviceNotifications : requestBrowserNotifications}
-                      disabled={!pushSubscriptionActive && notificationPermission === 'denied'}
+                      disabled={pushSubscriptionLoading || (!pushSubscriptionActive && notificationPermission === 'denied')}
                       className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${pushSubscriptionActive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                     >
                       <BellRing className="h-4 w-4" />
-                      {pushSubscriptionActive
+                      {pushSubscriptionLoading
+                        ? (pushSubscriptionActive ? 'Desactivando…' : 'Activando…')
+                        : pushSubscriptionActive
                         ? 'Desactivar notificaciones'
                         : notificationPermission === 'denied'
                           ? 'Notificaciones bloqueadas'
                           : 'Activar notificaciones'}
                     </button>
+
+                    {pushSubscriptionError && (
+                      <p className="rounded-lg bg-red-50 px-2.5 py-2 text-[11px] leading-4 text-red-700 dark:bg-red-950/30 dark:text-red-300">
+                        {pushSubscriptionError}
+                      </p>
+                    )}
 
                     <button
                       type="button"

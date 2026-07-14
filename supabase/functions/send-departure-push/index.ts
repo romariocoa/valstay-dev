@@ -7,6 +7,7 @@ const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
 const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
 const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:soporte@valstay.com';
 const cronSecret = Deno.env.get('PUSH_CRON_SECRET');
+const HOTEL_TIME_ZONE = 'America/Lima';
 
 if (!supabaseUrl || !serviceRoleKey || !vapidPublicKey || !vapidPrivateKey || !cronSecret) {
   throw new Error('Faltan secretos de Supabase, VAPID o PUSH_CRON_SECRET');
@@ -17,9 +18,9 @@ const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 function limaNow() {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Lima',
+    timeZone: HOTEL_TIME_ZONE,
     year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date());
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? '';
   return {
@@ -50,8 +51,23 @@ Deno.serve(async request => {
     const configuredTime = String(hotel.notification_time || '07:00').slice(0, 5);
     if (now.time < configuredTime) continue;
 
-    // Claim this tenant/day before doing any work. The unique constraint makes
-    // this atomic, so overlapping cron executions cannot send twice.
+    const { data: stays, error: stayError } = await supabase
+      .from('stays')
+      .select('id, rooms(number)')
+      .eq('tenant_id', hotel.tenant_id)
+      .in('status', ['active', 'baja'])
+      .lte('check_out_date', lastCompletedNight);
+    if (stayError) throw stayError;
+
+    // Do not consume today's delivery when there is nothing to notify. This
+    // lets the cron retry if a departure is registered later the same day.
+    if ((stays?.length ?? 0) === 0) {
+      results.push({ tenant_id: hotel.tenant_id, stays: 0, sent: 0 });
+      continue;
+    }
+
+    // Claim this tenant/day immediately before sending. The unique constraint
+    // makes this atomic, so overlapping cron executions cannot send twice.
     const { error: claimError } = await supabase.from('push_delivery_log').insert({
       tenant_id: hotel.tenant_id,
       notice_date: now.date,
@@ -59,18 +75,6 @@ Deno.serve(async request => {
     });
     if (claimError?.code === '23505') continue;
     if (claimError) throw claimError;
-
-    const { data: stays, error: stayError } = await supabase
-      .from('stays')
-      .select('id, rooms(number)')
-      .eq('tenant_id', hotel.tenant_id)
-      .in('status', ['active', 'baja'])
-      .lte('check_out_date', lastCompletedNight);
-    if (stayError) {
-      await supabase.from('push_delivery_log').delete()
-        .eq('tenant_id', hotel.tenant_id).eq('notice_date', now.date);
-      throw stayError;
-    }
 
     const { data: subscriptions, error: subscriptionError } = await supabase
       .from('push_subscriptions')
@@ -83,34 +87,32 @@ Deno.serve(async request => {
     }
 
     let sentCount = 0;
-    if ((stays?.length ?? 0) > 0) {
-      const rooms = (stays ?? []).map(stay => `Hab. ${stay.rooms?.number ?? '—'}`).join(', ');
-      const payload = JSON.stringify({
-        title: `${stays!.length} salida${stays!.length === 1 ? '' : 's'} requiere${stays!.length === 1 ? '' : 'n'} atención`,
-        body: rooms,
-        url: '/?section=stays',
-        tag: `departures-${hotel.tenant_id}-${now.date}`,
-      });
+    const rooms = (stays ?? []).map(stay => `Hab. ${stay.rooms?.number ?? '—'}`).join(', ');
+    const payload = JSON.stringify({
+      title: `${stays!.length} salida${stays!.length === 1 ? '' : 's'} requiere${stays!.length === 1 ? '' : 'n'} atención`,
+      body: rooms,
+      url: '/?section=stays',
+      tag: `departures-${hotel.tenant_id}-${now.date}`,
+    });
 
-      for (const subscription of subscriptions ?? []) {
-        try {
-          await webpush.sendNotification({
-            endpoint: subscription.endpoint,
-            keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-          }, payload);
-          sentCount += 1;
-        } catch (error) {
-          const statusCode = (error as { statusCode?: number }).statusCode;
-          if (statusCode === 404 || statusCode === 410) {
-            await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
-          } else {
-            console.error('No se pudo enviar push', error);
-          }
+    for (const subscription of subscriptions ?? []) {
+      try {
+        await webpush.sendNotification({
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        }, payload);
+        sentCount += 1;
+      } catch (error) {
+        const statusCode = (error as { statusCode?: number }).statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+        } else {
+          console.error('No se pudo enviar push', error);
         }
       }
     }
 
-    if ((stays?.length ?? 0) === 0 || sentCount > 0) {
+    if (sentCount > 0) {
       const { error: logError } = await supabase
         .from('push_delivery_log')
         .update({ sent_count: sentCount })
