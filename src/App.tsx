@@ -64,6 +64,14 @@ function urlBase64ToUint8Array(value: string): Uint8Array {
   return Uint8Array.from([...raw].map(character => character.charCodeAt(0)));
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+}
+
 function notificationDepartureDate(stay: StayWithDetails): string {
   const departure = new Date(stay.check_out_date + 'T12:00:00');
   departure.setDate(departure.getDate() + 1);
@@ -338,7 +346,7 @@ useEffect(() => {
       await registerWebPushSubscription();
       await showBrowserDepartureNotification();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo activar este dispositivo.';
+      const message = errorMessage(error, 'No se pudo activar este dispositivo.');
       setPushSubscriptionError(message);
       setPushSubscriptionActive(false);
     }
@@ -389,7 +397,7 @@ useEffect(() => {
     if (notificationPermission !== 'granted' || !currentUser || currentUser.role === 'demo') return;
     registerWebPushSubscription().catch(error => {
       console.error('No se pudo registrar este dispositivo para Web Push:', error);
-      setPushSubscriptionError(error instanceof Error ? error.message : 'No se pudo registrar este dispositivo.');
+      setPushSubscriptionError(errorMessage(error, 'No se pudo registrar este dispositivo.'));
       setPushSubscriptionActive(false);
     });
   // Se vuelve a registrar al cambiar la sesión o el permiso del dispositivo.
@@ -442,7 +450,7 @@ useEffect(() => {
       await clearLocalNotifications();
       setPushSubscriptionActive(false);
     } catch (error) {
-      setPushSubscriptionError(error instanceof Error ? error.message : 'No se pudo desactivar este dispositivo.');
+      setPushSubscriptionError(errorMessage(error, 'No se pudo desactivar este dispositivo.'));
     } finally {
       setPushSubscriptionLoading(false);
     }
