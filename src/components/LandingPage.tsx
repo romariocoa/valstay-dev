@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, BellRing, BedDouble, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, FileText, LogIn, Monitor, MousePointer2, PackageOpen, Smartphone, Tablet, Users } from 'lucide-react';
+import { BarChart3, BellRing, BedDouble, CheckCircle2, ChevronRight, CreditCard, FileText, LogIn, Monitor, MousePointer2, PackageOpen, Smartphone, Tablet, Users } from 'lucide-react';
 import { login } from '../lib/auth';
 
 export function LandingPage() {
   const [blinking, setBlinking] = useState(false);
   const [valuationDemo, setValuationDemo] = useState<'ready' | 'creating' | 'done'>('ready');
-  const [guidePage, setGuidePage] = useState(0);
   const [openingDemo, setOpeningDemo] = useState(false);
   const [demoError, setDemoError] = useState('');
   useEffect(() => {
@@ -48,14 +47,6 @@ export function LandingPage() {
     { name: 'Luis Mamani Condori', type: 'Staff', dni: '70193624', nights: [1, 1, 1, 1, 0, 0], rate: 'S/ 68.00', total: 'S/ 272.00' },
     { name: 'Mariela Huamán Soto', type: 'Empleado', dni: '72984105', nights: [0, 1, 1, 1, 1, 1], rate: 'S/ 56.00', total: 'S/ 280.00' },
     { name: 'Carlos Apaza Yana', type: 'Obrero', dni: '76531029', nights: [0, 0, 1, 1, 1, 1], rate: 'S/ 48.00', total: 'S/ 192.00' },
-  ];
-  const guidePages = [
-    { icon: BedDouble, title: 'Visualiza todo el hotel', text: 'Revisa en una sola pantalla qué habitaciones están libres, ocupadas, en limpieza o mantenimiento y registra un ingreso inmediatamente.', color: 'emerald', labels: ['Hab. 101 · Libre', 'Hab. 102 · Ocupada', 'Hab. 103 · En limpieza'] },
-    { icon: Users, title: 'Administra tus huéspedes', text: 'Consulta estancias activas, salidas pendientes, empresa, habitación y datos de contacto desde tarjetas claras.', color: 'blue', labels: ['Lucía Mendoza · Hab. 204', 'Diego Salazar · Hab. 106', 'Elena Quispe · Hab. 301'] },
-    { icon: BarChart3, title: 'Reportes y valorizaciones', text: 'Filtra por empresa, habitación o huésped y exporta historiales, CSV y valorizaciones de alojamiento.', color: 'cyan', labels: ['MMG · 18 noches', 'Minera Andina · 12 noches', 'Particular · 4 noches'] },
-    { icon: BedDouble, title: 'Configura pisos y habitaciones', text: 'Crea habitaciones, define tipo, capacidad y tarifa, y distribúyelas por pisos de manera ordenada.', color: 'amber', labels: ['Piso 1 · 7 habitaciones', 'Piso 2 · 11 habitaciones', 'Agregar habitación'] },
-    { icon: Users, title: 'Controla usuarios y permisos', text: 'Crea accesos separados para administradores y recepcionistas, cada uno con los permisos que necesita.', color: 'violet', labels: ['Andrea Torres · Administradora', 'Carlos Peña · Recepcionista', 'Nuevo usuario'] },
-    { icon: CreditCard, title: 'Configura todos los datos del hotel', text: 'Guarda identidad, datos fiscales, firma, pagos con QR y el horario de notificaciones para tus valorizaciones.', color: 'emerald', labels: ['Datos del hospedaje', 'Valorización y firma', 'Pagos y notificaciones'] },
   ];
 
   return <div className="min-h-screen bg-slate-950 text-white">
@@ -184,35 +175,6 @@ export function LandingPage() {
               {openingDemo ? 'Abriendo demo...' : 'Mostrar demo'}
             </button>
             {demoError && <p className="mt-3 text-sm font-semibold text-red-400">{demoError}</p>}
-          </div>
-
-          <div className="relative mt-10 overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-slate-800 to-slate-950 p-3 shadow-2xl sm:p-6">
-            <div className="grid min-h-[430px] overflow-hidden rounded-2xl bg-slate-100 text-slate-900 shadow-2xl lg:grid-cols-2">
-              <div className="relative flex flex-col justify-center border-b border-slate-300 p-7 sm:p-10 lg:border-b-0 lg:border-r">
-                <div className="absolute bottom-0 right-0 top-0 w-px bg-slate-300 shadow-[4px_0_10px_rgba(15,23,42,.18)]" />
-                <span className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Página {guidePage + 1} de {guidePages.length}</span>
-                {(() => { const Icon = guidePages[guidePage].icon; return <Icon className="mt-6 h-14 w-14 text-slate-800" />; })()}
-                <h3 className="mt-5 text-3xl font-black">{guidePages[guidePage].title}</h3>
-                <p className="mt-4 max-w-md leading-7 text-slate-600">{guidePages[guidePage].text}</p>
-                <div className="mt-8 flex gap-2">
-                  {guidePages.map((page, index) => <button key={page.title} onClick={() => setGuidePage(index)} aria-label={`Ir a página ${index + 1}`} className={`h-2 rounded-full transition-all ${index === guidePage ? 'w-8 bg-cyan-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`} />)}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center bg-slate-200 p-5 sm:p-9">
-                <div key={guidePage} className="w-full max-w-md animate-[pulse_0.5s_ease-out_1] overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-xl">
-                  <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-900 px-4 py-3"><span className="h-2.5 w-2.5 rounded-full bg-rose-400" /><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /><span className="ml-2 text-[10px] text-slate-400">Vista de ValStay</span></div>
-                  <div className="p-5">
-                    <div className="mb-5 flex items-center justify-between"><div><p className="text-xs text-slate-400">ValStay</p><p className="font-black">{guidePages[guidePage].title}</p></div><div className="rounded-lg bg-cyan-100 p-2 text-cyan-700">{(() => { const Icon = guidePages[guidePage].icon; return <Icon className="h-5 w-5" />; })()}</div></div>
-                    <div className="mb-3 flex gap-2"><div className="h-8 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-400">Buscar por nombre, empresa o habitación...</div><div className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white">+ Nuevo</div></div>
-                    <div className={`grid gap-3 ${guidePage === 0 || guidePage === 3 ? 'sm:grid-cols-3' : ''}`}>{guidePages[guidePage].labels.map((label, index) => <div key={label} className={`flex items-center gap-3 rounded-xl border p-3 ${guidePage === 0 ? index === 0 ? 'border-emerald-300' : index === 1 ? 'border-rose-300' : 'border-cyan-300' : 'border-slate-200'}`}><span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-emerald-100 text-emerald-700' : index === 1 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{guidePage === 0 || guidePage === 3 ? String(101 + index) : index + 1}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{label}</p><div className="mt-1.5 h-1.5 w-3/4 rounded bg-slate-100" /></div>{guidePage !== 0 && <ChevronRight className="h-4 w-4 text-slate-300" />}</div>)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button onClick={() => setGuidePage(current => (current - 1 + guidePages.length) % guidePages.length)} className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/80 text-white shadow-lg hover:bg-cyan-700" aria-label="Página anterior"><ChevronLeft className="h-5 w-5" /></button>
-            <button onClick={() => setGuidePage(current => (current + 1) % guidePages.length)} className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/80 text-white shadow-lg hover:bg-cyan-700" aria-label="Página siguiente"><ChevronRight className="h-5 w-5" /></button>
           </div>
         </div>
       </section>
