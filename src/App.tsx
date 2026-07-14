@@ -799,21 +799,25 @@ if (checkSuperuser(currentUser)) {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={pushSubscriptionActive ? disableDeviceNotifications : requestBrowserNotifications}
-                      disabled={pushSubscriptionLoading || (!pushSubscriptionActive && notificationPermission === 'denied')}
-                      className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${pushSubscriptionActive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-                    >
-                      <BellRing className="h-4 w-4" />
-                      {pushSubscriptionLoading
-                        ? (pushSubscriptionActive ? 'Desactivando…' : 'Activando…')
-                        : pushSubscriptionActive
-                        ? 'Desactivar notificaciones'
-                        : notificationPermission === 'denied'
-                          ? 'Notificaciones bloqueadas'
-                          : 'Activar notificaciones'}
-                    </button>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2.5 dark:border-zinc-700">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200">Notificaciones en este dispositivo</p>
+                        <p className="mt-0.5 text-[11px] text-gray-400 dark:text-zinc-500">
+                          {pushSubscriptionLoading ? 'Actualizando…' : pushSubscriptionActive ? 'Activadas' : 'Desactivadas'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={pushSubscriptionActive}
+                        aria-label="Notificaciones en este dispositivo"
+                        onClick={pushSubscriptionActive ? disableDeviceNotifications : requestBrowserNotifications}
+                        disabled={pushSubscriptionLoading || (!pushSubscriptionActive && notificationPermission === 'denied')}
+                        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${pushSubscriptionActive ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-600'}`}
+                      >
+                        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${pushSubscriptionActive ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
 
                     {pushSubscriptionError && (
                       <p className="rounded-lg bg-red-50 px-2.5 py-2 text-[11px] leading-4 text-red-700 dark:bg-red-950/30 dark:text-red-300">
@@ -828,13 +832,6 @@ if (checkSuperuser(currentUser)) {
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     >
                       Probar notificación
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearLocalNotifications}
-                      className="w-full rounded-lg px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                    >
-                      Limpiar en este dispositivo
                     </button>
                     {notificationPermission === 'denied' && (
                       <p className="px-1 text-[11px] leading-4 text-amber-600 dark:text-amber-400">Habilita las notificaciones desde los permisos del navegador para este sitio.</p>
@@ -1133,9 +1130,11 @@ if (checkSuperuser(currentUser)) {
               config={hotelConfig}
               onSave={saveHotelConfig}
               notificationPermission={notificationPermission}
-              onRequestNotifications={requestBrowserNotifications}
+              pushSubscriptionActive={pushSubscriptionActive}
+              pushSubscriptionLoading={pushSubscriptionLoading}
+              pushSubscriptionError={pushSubscriptionError}
+              onToggleNotifications={pushSubscriptionActive ? disableDeviceNotifications : requestBrowserNotifications}
               onSendTestNotification={sendTestNotification}
-              onClearLocalNotifications={clearLocalNotifications}
             />
           )}
         </div>

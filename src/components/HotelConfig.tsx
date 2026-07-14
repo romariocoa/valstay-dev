@@ -6,12 +6,14 @@ interface HotelConfigProps {
   config: HotelConfigType;
   onSave: (updates: Partial<HotelConfigType>) => Promise<{ error?: string }>;
   notificationPermission: NotificationPermission;
-  onRequestNotifications: () => Promise<void>;
+  pushSubscriptionActive: boolean;
+  pushSubscriptionLoading: boolean;
+  pushSubscriptionError: string;
+  onToggleNotifications: () => Promise<void>;
   onSendTestNotification: () => Promise<void>;
-  onClearLocalNotifications: () => Promise<void>;
 }
 
-export function HotelConfig({ config, onSave, notificationPermission, onRequestNotifications, onSendTestNotification, onClearLocalNotifications }: HotelConfigProps) {
+export function HotelConfig({ config, onSave, notificationPermission, pushSubscriptionActive, pushSubscriptionLoading, pushSubscriptionError, onToggleNotifications, onSendTestNotification }: HotelConfigProps) {
   const [name, setName]                       = useState(config.name);
   const [logoUrl, setLogoUrl]                 = useState(config.logo_url ?? '');
   const [razonSocial, setRazonSocial]         = useState(config.razon_social ?? '');
@@ -256,6 +258,28 @@ export function HotelConfig({ config, onSave, notificationPermission, onRequestN
             </p>
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Guarda los cambios para aplicar la hora seleccionada.</p>
           </div>
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-3 py-3 dark:border-zinc-700">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 dark:text-zinc-200">Notificaciones en este dispositivo</p>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-zinc-500">
+                {pushSubscriptionLoading ? 'Actualizando…' : pushSubscriptionActive ? 'Activadas' : 'Desactivadas'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pushSubscriptionActive}
+              aria-label="Notificaciones en este dispositivo"
+              onClick={onToggleNotifications}
+              disabled={pushSubscriptionLoading || (!pushSubscriptionActive && notificationPermission === 'denied')}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${pushSubscriptionActive ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-600'}`}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${pushSubscriptionActive ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+          {pushSubscriptionError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{pushSubscriptionError}</p>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-end gap-4">
             <label className="flex items-center gap-2 cursor-pointer select-none pb-2">
               <input type="checkbox" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)}
@@ -269,19 +293,9 @@ export function HotelConfig({ config, onSave, notificationPermission, onRequestN
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {notificationPermission === 'default' && (
-              <button type="button" onClick={onRequestNotifications}
-                className="px-3 py-2 rounded-lg bg-gray-900 dark:bg-zinc-700 text-white text-xs font-semibold hover:bg-gray-800 dark:hover:bg-zinc-600 transition-colors">
-                Activar notificaciones
-              </button>
-            )}
-            <button type="button" onClick={onSendTestNotification} disabled={notificationPermission !== 'granted'}
+            <button type="button" onClick={onSendTestNotification} disabled={!pushSubscriptionActive || notificationPermission !== 'granted'}
               className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               Enviar notificación de prueba
-            </button>
-            <button type="button" onClick={onClearLocalNotifications}
-              className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
-              Limpiar en este dispositivo
             </button>
             <button type="button" onClick={disableNotificationsForAll} disabled={saving || !notificationsEnabled}
               className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
