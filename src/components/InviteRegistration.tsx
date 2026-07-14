@@ -17,14 +17,14 @@ export function InviteRegistration() {
       setLoading(false);
       return;
     }
-    if (form.password.length < 6 || !/[A-Z]/.test(form.password) || !/[0-9]/.test(form.password)) {
-      setError('La contraseña debe tener 6 caracteres, una mayúscula y un número.');
+    if (form.password.length < 5 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/[0-9]/.test(form.password)) {
+      setError('La contraseña debe tener mínimo 5 caracteres, una mayúscula, una minúscula y un número. Puede incluir signos.');
       setLoading(false);
       return;
     }
     const result = await supabase.rpc('register_from_invite', { p_token: token, p_hotel_name: form.hotel, p_display_name: form.name, p_phone: form.phone, p_username: form.username, p_password: form.password });
     setLoading(false);
-    if (result.error) { setError(result.error.message.includes('invitacion_invalida') ? 'El enlace ya fue utilizado o venció.' : 'Revisa los datos. La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (result.error) { setError(result.error.message.includes('invitacion_invalida') ? 'El enlace ya fue utilizado o venció.' : 'Revisa los datos. La contraseña requiere mayúscula, minúscula y número; también acepta signos.'); return; }
     clearSession();
     setDone(true);
   };
@@ -38,8 +38,8 @@ export function InviteRegistration() {
           <input required className={input} placeholder="Nombre del administrador" value={form.name} onChange={e => setForm({...form, name:e.target.value})}/>
           <input required type="tel" inputMode="numeric" pattern="[0-9]{9}" maxLength={9} className={input} placeholder="Celular (9 dígitos)" value={form.phone} onChange={e => setForm({...form, phone:e.target.value.replace(/\D/g, '').slice(0, 9)})}/>
           <input required className={input} placeholder="Usuario" value={form.username} onChange={e => setForm({...form, username:e.target.value})}/>
-          <input required minLength={6} pattern="(?=.*[A-Z])(?=.*[0-9]).{6,}" title="Mínimo 6 caracteres, una mayúscula y un número" type="password" className={input} placeholder="Contraseña" value={form.password} onChange={e => setForm({...form, password:e.target.value})}/>
-          <p className="text-xs text-slate-500">Mínimo 6 caracteres, una mayúscula y un número.</p>
+          <input required minLength={5} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{5,}" title="Mínimo 5 caracteres, una mayúscula, una minúscula y un número. Se permiten signos." type="password" className={input} placeholder="Contraseña" value={form.password} onChange={e => setForm({...form, password:e.target.value})}/>
+          <p className="text-xs text-slate-500">Mínimo 5 caracteres, con mayúscula, minúscula y número. Se permiten signos.</p>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 py-3.5 font-bold disabled:opacity-60">{loading && <RefreshCw className="h-4 w-4 animate-spin"/>}Crear cuenta</button>
         </form></>}
