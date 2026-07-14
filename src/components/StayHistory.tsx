@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useStayHistory, useStays } from '../hooks/useData';
 import { Room, getClient } from '../lib/supabase';
 import {
@@ -783,7 +783,7 @@ function ReporteEmpresa({
   useState<SortDirection>('asc');
   const hasFilters = Boolean(selectedDate || empresaFilter);
 
-  const loadReportData = async () => {
+  const loadReportData = useCallback(async () => {
     setLoadingReport(true);
     setReportError('');
 
@@ -820,11 +820,11 @@ function ReporteEmpresa({
     } finally {
       setLoadingReport(false);
     }
-  };
+  }, [tenantId]);
 
   useEffect(() => {
     loadReportData();
-  }, [tenantId]);
+  }, [loadReportData]);
 const handleSort = (field: SortField) => {
   if (sortField === field) {
     setSortDirection(current =>

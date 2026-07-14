@@ -1,6 +1,6 @@
 
 import { getClient, Room, StayWithDetails } from '../lib/supabase';
-import { Plus, Trash2, Edit2, X, Save, Building, Layers, Loader2, Lock } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Save, Layers, Loader2, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface RoomManagerProps {
@@ -21,8 +21,6 @@ const roomTypes = [
 const SPACE_TYPES = new Set<Room['type']>(['sala', 'tienda', 'lavanderia', 'almacen']);
 
 export function RoomManager({
-
-  tenantId,
 
   sessionToken,
 

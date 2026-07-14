@@ -8,9 +8,10 @@ interface HotelConfigProps {
   notificationPermission: NotificationPermission;
   onRequestNotifications: () => Promise<void>;
   onSendTestNotification: () => Promise<void>;
+  onClearLocalNotifications: () => Promise<void>;
 }
 
-export function HotelConfig({ config, onSave, notificationPermission, onRequestNotifications, onSendTestNotification }: HotelConfigProps) {
+export function HotelConfig({ config, onSave, notificationPermission, onRequestNotifications, onSendTestNotification, onClearLocalNotifications }: HotelConfigProps) {
   const [name, setName]                       = useState(config.name);
   const [logoUrl, setLogoUrl]                 = useState(config.logo_url ?? '');
   const [razonSocial, setRazonSocial]         = useState(config.razon_social ?? '');
@@ -183,6 +184,24 @@ export function HotelConfig({ config, onSave, notificationPermission, onRequestN
     setTimeout(() => setSuccess(false), 3000);
   };
 
+  const disableNotificationsForAll = async () => {
+    setError('');
+    setSaving(true);
+    setSuccess(false);
+    const { error: saveError } = await onSave({
+      notifications_enabled: false,
+      notification_time: notificationTime,
+    });
+    setSaving(false);
+    if (saveError) {
+      setError(saveError);
+      return;
+    }
+    setNotificationsEnabled(false);
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 3000);
+  };
+
   const clearLogo = () => {
     setLogoUrl('');
     setPreviewError(false);
@@ -259,6 +278,14 @@ export function HotelConfig({ config, onSave, notificationPermission, onRequestN
             <button type="button" onClick={onSendTestNotification} disabled={notificationPermission !== 'granted'}
               className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               Enviar notificación de prueba
+            </button>
+            <button type="button" onClick={onClearLocalNotifications}
+              className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+              Limpiar en este dispositivo
+            </button>
+            <button type="button" onClick={disableNotificationsForAll} disabled={saving || !notificationsEnabled}
+              className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              Desactivar avisos para todos
             </button>
           </div>
         </div>}

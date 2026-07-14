@@ -1,10 +1,7 @@
--- Tenant-specific browser notification schedule.
-ALTER TABLE public.hotel_config
-  ADD COLUMN IF NOT EXISTS notifications_enabled boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS notification_time time NOT NULL DEFAULT '07:00';
-
+-- Restrict notification scheduling to tenant administrators even when the
+-- original notification-settings migration has already been deployed.
 CREATE OR REPLACE FUNCTION public.save_hotel_notification_settings(
-  p_session_token UUID,
+  p_session_token uuid,
   p_enabled boolean,
   p_notification_time time
 )
@@ -14,8 +11,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_tenant_id UUID;
-  v_role TEXT;
+  v_tenant_id uuid;
+  v_role text;
 BEGIN
   SELECT tenant_id, role
   INTO v_tenant_id, v_role
@@ -45,3 +42,6 @@ BEGIN
       updated_at = now();
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.save_hotel_notification_settings(uuid, boolean, time) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.save_hotel_notification_settings(uuid, boolean, time) TO anon, authenticated;

@@ -536,15 +536,6 @@ useEffect(() => {
     setEditSelRoom(null);
   };
 
-  const deleteRoom = async (room: Room) => {
-    await getClient().rpc('delete_room', {
-      p_session_token: sessionToken,
-      p_room_id: room.id,
-    });
-    setEditSelRoom(null);
-    onUpdate();
-  };
-
   const handleAddRoom = async () => {
     const num = addRoomNum.trim();
     if (!num) { setAddRoomErr('Ingresa un nombre o numero.'); return; }

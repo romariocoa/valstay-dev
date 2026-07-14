@@ -59,8 +59,6 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   // Separate states: departing today vs overdue vs active
   const isTodayDeparture = daysRemaining === 0;
   const isOverdue = daysRemaining < 0;
-  const needsAction = isTodayDeparture || isOverdue;
-
   const borderColor = isOverdue
     ? 'border-l-red-500'
     : isTodayDeparture

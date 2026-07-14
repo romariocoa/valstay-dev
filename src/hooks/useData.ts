@@ -257,18 +257,29 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
     const hasFirmaChange = 'firma_url' in updates;
     const hasPaymentQrChange = 'yape_qr_url' in updates || 'plin_qr_url' in updates;
     const hasNotificationChange = 'notifications_enabled' in updates || 'notification_time' in updates;
+    const hasFieldChange = [
+      'name',
+      'razon_social',
+      'ruc',
+      'direccion',
+      'cuenta_bancaria',
+      'cci',
+      'n_detraccion',
+    ].some(field => field in updates);
 
-    const { error: fieldsErr } = await getClient().rpc('save_hotel_fields', {
-      p_session_token:   sessionToken,
-      p_name:            updates.name ?? config.name,
-      p_razon_social:    updates.razon_social ?? config.razon_social ?? null,
-      p_ruc:             updates.ruc ?? config.ruc ?? null,
-      p_direccion:       updates.direccion ?? config.direccion ?? null,
-      p_cuenta_bancaria: updates.cuenta_bancaria ?? config.cuenta_bancaria ?? null,
-      p_cci:             updates.cci ?? config.cci ?? null,
-      p_n_detraccion:    updates.n_detraccion ?? config.n_detraccion ?? null,
-    });
-    if (fieldsErr) return { error: fieldsErr.message };
+    if (hasFieldChange) {
+      const { error: fieldsErr } = await getClient().rpc('save_hotel_fields', {
+        p_session_token:   sessionToken,
+        p_name:            updates.name ?? config.name,
+        p_razon_social:    updates.razon_social ?? config.razon_social ?? null,
+        p_ruc:             updates.ruc ?? config.ruc ?? null,
+        p_direccion:       updates.direccion ?? config.direccion ?? null,
+        p_cuenta_bancaria: updates.cuenta_bancaria ?? config.cuenta_bancaria ?? null,
+        p_cci:             updates.cci ?? config.cci ?? null,
+        p_n_detraccion:    updates.n_detraccion ?? config.n_detraccion ?? null,
+      });
+      if (fieldsErr) return { error: fieldsErr.message };
+    }
 
     if (hasLogoChange) {
       const { error: logoErr } = await getClient().rpc('save_hotel_logo', {

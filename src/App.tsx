@@ -36,7 +36,6 @@ import {
   Building2,
   ShieldCheck,
   UserCircle,
-  History,
   UsersRound,
   Settings,
   Sun,
@@ -56,6 +55,13 @@ type Tab = 'dashboard' | 'stays' | 'history' | 'settings' | 'users' | 'config';
 function localTodayStr(): string {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+}
+
+function urlBase64ToUint8Array(value: string): Uint8Array {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map(character => character.charCodeAt(0)));
 }
 
 function notificationDepartureDate(stay: StayWithDetails): string {
@@ -83,12 +89,16 @@ function App() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() =>
     'Notification' in window ? Notification.permission : 'denied'
   );
+  const [receptionistNotificationsOpen, setReceptionistNotificationsOpen] = useState(false);
+  const [pushSubscriptionActive, setPushSubscriptionActive] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [guestSearch, setGuestSearch] = useState('');
   const [showDepartureCards, setShowDepartureCards] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [sidebarPuchiBlinking, setSidebarPuchiBlinking] = useState(false);
   const tenantId = currentUser?.tenantId ?? null;
+  const notificationOptOutKey = currentUser && tenantId
+    ? `push_notifications_disabled_${tenantId}_${currentUser.id}`
+    : null;
   const effectiveSidebarPinned = isDesktop && sidebarPinned;
 
   const { rooms, loading: roomsLoading, error: roomsError, refetch: refetchRooms } = useRooms(tenantId);
@@ -283,6 +293,8 @@ useEffect(() => {
   );
 
   const showBrowserDepartureNotification = async () => {
+    if (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY) return;
+    if (notificationOptOutKey && localStorage.getItem(notificationOptOutKey) === 'true') return;
     if (!currentUser || !tenantId || !afterSevenAm || departuresForNotification.length === 0) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const configuredTimeKey = (hotelConfig.notification_time || '07:00').slice(0, 5).replace(':', '');
@@ -313,12 +325,58 @@ useEffect(() => {
 
   const requestBrowserNotifications = async () => {
     if (!('Notification' in window)) return;
+    if (notificationOptOutKey) localStorage.removeItem(notificationOptOutKey);
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
     if (permission === 'granted') {
+      await registerWebPushSubscription();
       await showBrowserDepartureNotification();
     }
   };
+
+  const registerWebPushSubscription = async () => {
+    const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY;
+    if (!currentUser || !('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+    if (notificationOptOutKey && localStorage.getItem(notificationOptOutKey) === 'true') {
+      setPushSubscriptionActive(false);
+      return;
+    }
+    if (!publicKey) {
+      // Notification permission alone is not a server-side Web Push subscription.
+      setPushSubscriptionActive(false);
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+
+    const json = subscription.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+    const { error } = await getClient().rpc('register_push_subscription', {
+      p_session_token: currentUser.sessionToken,
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth,
+      p_user_agent: navigator.userAgent,
+    });
+    if (error) throw error;
+    setPushSubscriptionActive(true);
+  };
+
+  useEffect(() => {
+    if (notificationPermission !== 'granted' || !currentUser || currentUser.role === 'demo') return;
+    registerWebPushSubscription().catch(error => {
+      console.error('No se pudo registrar este dispositivo para Web Push:', error);
+    });
+  // Se vuelve a registrar al cambiar la sesión o el permiso del dispositivo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationPermission, currentUser?.id, tenantId]);
 
   const sendTestNotification = async () => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -330,7 +388,40 @@ useEffect(() => {
       tag: 'hotel-notification-test',
     });
   };
- 
+
+  const clearLocalNotifications = async () => {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const notifications = await registration.getNotifications();
+      notifications.forEach(notification => notification.close());
+    }
+
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith('departure_notification_')) localStorage.removeItem(key);
+    }
+  };
+
+  const disableDeviceNotifications = async () => {
+    if (notificationOptOutKey) localStorage.setItem(notificationOptOutKey, 'true');
+
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription && currentUser) {
+        const { error } = await getClient().rpc('unregister_push_subscription', {
+          p_session_token: currentUser.sessionToken,
+          p_endpoint: subscription.endpoint,
+        });
+        if (error) console.error('No se pudo retirar la suscripción del servidor:', error);
+        await subscription.unsubscribe();
+      }
+    }
+
+    await clearLocalNotifications();
+    setPushSubscriptionActive(false);
+  };
+
 
   // Force operational non-admin users back to the sections allowed by their role.
   useEffect(() => {
@@ -388,24 +479,6 @@ if (checkSuperuser(currentUser)) {
   logout();
   setCurrentUser(null);
 };
-
-const handleRefreshAll = async () => {
-  if (refreshing) return;
-
-  setRefreshing(true);
-
-  try {
-    await Promise.all([
-      refetchRooms(),
-      refetchStays(),
-    ]);
-  } catch (error) {
-    console.error('Error al actualizar los datos:', error);
-  } finally {
-    setRefreshing(false);
-  }
-};
-  
 
   const handleCheckIn = (room: Room) => {
     setSelectedRoom(room);
@@ -661,6 +734,68 @@ const handleRefreshAll = async () => {
               </div>
             </div>
 
+            {currentUser.role === 'receptionist' && (
+              <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => setReceptionistNotificationsOpen(open => !open)}
+                  aria-expanded={receptionistNotificationsOpen}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <BellRing className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="flex-1">Notificaciones</span>
+                  {pushSubscriptionActive && <span className="h-2 w-2 rounded-full bg-emerald-500" title="Activadas en este dispositivo" />}
+                  {receptionistNotificationsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+
+                {receptionistNotificationsOpen && (
+                  <div className="space-y-2 border-t border-gray-200 p-2.5 dark:border-zinc-700">
+                    <div className="rounded-lg bg-gray-50 p-2.5 dark:bg-zinc-800">
+                      <p className="text-xs font-medium text-gray-500 dark:text-zinc-400">Horario configurado por el administrador</p>
+                      <p className="mt-1 text-sm font-bold text-gray-800 dark:text-zinc-100">
+                        {hotelConfig.notifications_enabled
+                          ? `${(hotelConfig.notification_time || '07:00').slice(0, 5)} · Avisos activos`
+                          : 'Avisos desactivados por el administrador'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={pushSubscriptionActive ? disableDeviceNotifications : requestBrowserNotifications}
+                      disabled={!pushSubscriptionActive && notificationPermission === 'denied'}
+                      className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${pushSubscriptionActive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    >
+                      <BellRing className="h-4 w-4" />
+                      {pushSubscriptionActive
+                        ? 'Desactivar notificaciones'
+                        : notificationPermission === 'denied'
+                          ? 'Notificaciones bloqueadas'
+                          : 'Activar notificaciones'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={sendTestNotification}
+                      disabled={!pushSubscriptionActive || notificationPermission !== 'granted'}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Probar notificación
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearLocalNotifications}
+                      className="w-full rounded-lg px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    >
+                      Limpiar en este dispositivo
+                    </button>
+                    {notificationPermission === 'denied' && (
+                      <p className="px-1 text-[11px] leading-4 text-amber-600 dark:text-amber-400">Habilita las notificaciones desde los permisos del navegador para este sitio.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
@@ -740,23 +875,6 @@ const handleRefreshAll = async () => {
 
             {activeTab === 'dashboard' ? (
              <div className="flex items-center gap-2">
-               {false && (
- <button
-  type="button"
-  onClick={handleRefreshAll}
-  disabled={refreshing}
-  title="Actualizar todos los datos"
-  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
->
-  <RefreshCw
-    className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`}
-  />
-
-  <span className="hidden sm:inline">
-    {refreshing ? 'Actualizando...' : 'Actualizar'}
-  </span>
-</button>)}
-
   {activeTab === 'dashboard' ? (
     <button
       onClick={() => setShowCheckIn(true)}
@@ -969,6 +1087,7 @@ const handleRefreshAll = async () => {
               notificationPermission={notificationPermission}
               onRequestNotifications={requestBrowserNotifications}
               onSendTestNotification={sendTestNotification}
+              onClearLocalNotifications={clearLocalNotifications}
             />
           )}
         </div>

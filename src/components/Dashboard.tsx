@@ -50,7 +50,6 @@ export function Dashboard({
   canEditFloorPlan = true,
   canManageRooms = false,
   onGoToRooms,
-  logoUrl,
   readOnly = false,
 }: DashboardProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
