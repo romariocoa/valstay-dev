@@ -1,6 +1,12 @@
 import { supabase, getClient, setSession } from './supabase';
 
 export type UserRole = 'superuser' | 'admin' | 'receptionist' | 'demo';
+export type ManagedUserRole = Exclude<UserRole, 'superuser'>;
+
+export const PASSWORD_REQUIREMENTS = 'Mínimo 5 caracteres, una mayúscula, una minúscula y un número. Se permiten signos.';
+export function isValidPassword(password: string): boolean {
+  return password.length >= 5 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password);
+}
 
 export interface AppUser {
   id: string;
@@ -320,10 +326,11 @@ export async function getUsers(tenantId: string): Promise<AppUserRecord[]> {
 export async function createUser(
   username: string,
   password: string,
-  role: Exclude<UserRole, 'superuser'>,
+  role: ManagedUserRole,
   displayName: string,
   tenantId: string,
 ): Promise<{ error?: string }> {
+  if (!isValidPassword(password)) return { error: PASSWORD_REQUIREMENTS };
   const { error } = await getClient().from('app_users').insert({
     username: username.toLowerCase().trim(),
     password,
@@ -340,8 +347,9 @@ export async function createUser(
 
 export async function updateUser(
   id: string,
-  fields: { password?: string; role?: Exclude<UserRole, 'superuser'>; displayName?: string },
+  fields: { password?: string; role?: ManagedUserRole; displayName?: string },
 ): Promise<{ error?: string }> {
+  if (fields.password && !isValidPassword(fields.password)) return { error: PASSWORD_REQUIREMENTS };
   const updates: Record<string, string> = {};
   if (fields.password) updates.password = fields.password;
   if (fields.role) updates.role = fields.role;

@@ -4,8 +4,9 @@ import {
   Eye, EyeOff, Save, X, Users, KeyRound,
 } from 'lucide-react';
 import {
-  AppUser, AppUserRecord, UserRole,
+  AppUser, AppUserRecord, ManagedUserRole, UserRole,
   getUsers, createUser, updateUser, deleteUser,
+  isValidPassword, PASSWORD_REQUIREMENTS,
 } from '../lib/auth';
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
 interface EditState {
   id: string;
   displayName: string;
-  role: UserRole;
+  role: ManagedUserRole;
   password: string;
 }
 
@@ -25,6 +26,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   superuser: 'Super Administrador',
   admin: 'Administrador',
   receptionist: 'Recepcionista',
+  demo: 'Demostración',
 };
 
 export function UserManager({ currentUser, tenantId, readOnly = false }: Props) {
@@ -36,7 +38,7 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
 
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('receptionist');
+  const [newRole, setNewRole] = useState<ManagedUserRole>('receptionist');
   const [newDisplayName, setNewDisplayName] = useState('');
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
@@ -58,12 +60,12 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
       setCreateErr('Todos los campos son obligatorios.');
       return;
     }
-    if (newPassword.length < 4) {
-      setCreateErr('La contraseña debe tener al menos 4 caracteres.');
+    if (!isValidPassword(newPassword)) {
+      setCreateErr(PASSWORD_REQUIREMENTS);
       return;
     }
     setCreating(true);
-    const { error } = await createUser(newUsername, newPassword, newRole as Exclude<typeof newRole, 'superuser'>, newDisplayName, tenantId);
+    const { error } = await createUser(newUsername, newPassword, newRole, newDisplayName, tenantId);
     setCreating(false);
     if (error) { setCreateErr(error); return; }
     setNewUsername(''); setNewPassword(''); setNewDisplayName(''); setNewRole('receptionist');
@@ -73,6 +75,10 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
 
   const handleSaveEdit = async () => {
     if (!editing) return;
+    if (editing.password && !isValidPassword(editing.password)) {
+      setGlobalErr(PASSWORD_REQUIREMENTS);
+      return;
+    }
     setSaving(true);
     setGlobalErr('');
     const { error } = await updateUser(editing.id, {
@@ -174,7 +180,7 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
                     type={showPass ? 'text' : 'password'}
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
-                    placeholder="Min. 4 caracteres"
+                    placeholder="Contraseña segura"
                     className={`${inputBase} pr-10`}
                   />
                   <button type="button" onClick={() => setShowPass(p => !p)}
@@ -187,7 +193,7 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
                 <label className={labelBase}>Rol</label>
                 <select
                   value={newRole}
-                  onChange={e => setNewRole(e.target.value as UserRole)}
+                  onChange={e => setNewRole(e.target.value as ManagedUserRole)}
                   className={inputBase}
                 >
                   <option value="receptionist">Recepcionista</option>
@@ -260,7 +266,7 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
                       onClick={() => setEditing(isEditing ? null : {
                         id: user.id,
                         displayName: user.displayName,
-                        role: user.role,
+                        role: user.role as ManagedUserRole,
                         password: '',
                       })}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
@@ -313,7 +319,7 @@ export function UserManager({ currentUser, tenantId, readOnly = false }: Props) 
                         <label className="block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1.5">Rol</label>
                         <select
                           value={editing.role}
-                          onChange={e => setEditing(prev => prev ? { ...prev, role: e.target.value as UserRole } : null)}
+                          onChange={e => setEditing(prev => prev ? { ...prev, role: e.target.value as ManagedUserRole } : null)}
                           disabled={isMe}
                           className="w-full border border-gray-300 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-zinc-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 disabled:opacity-50"
                         >

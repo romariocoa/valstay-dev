@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Building2, CheckCircle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { clearSession } from '../lib/auth';
+import { clearSession, isValidPassword, PASSWORD_REQUIREMENTS } from '../lib/auth';
 
 export function InviteRegistration() {
   const token = new URLSearchParams(window.location.search).get('token');
@@ -18,14 +18,25 @@ export function InviteRegistration() {
       setLoading(false);
       return;
     }
-    if (form.password.length < 5 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/[0-9]/.test(form.password)) {
-      setError('La contraseña debe tener mínimo 5 caracteres, una mayúscula, una minúscula y un número. Puede incluir signos.');
+    if (!isValidPassword(form.password)) {
+      setError(PASSWORD_REQUIREMENTS);
       setLoading(false);
       return;
     }
     const result = await supabase.rpc('register_from_invite', { p_token: token, p_hotel_name: form.hotel, p_display_name: form.name, p_phone: form.phone, p_username: form.username, p_password: form.password });
     setLoading(false);
-    if (result.error) { setError(result.error.message.includes('invitacion_invalida') ? 'El enlace ya fue utilizado o venció.' : 'Revisa los datos. La contraseña requiere mayúscula, minúscula y número; también acepta signos.'); return; }
+    if (result.error) {
+      const message = result.error.message;
+      if (message.includes('invitacion_invalida')) setError('El enlace ya fue utilizado o venció.');
+      else if (message.includes('hotel_invalido')) setError('El nombre del hotel debe tener al menos 3 caracteres.');
+      else if (message.includes('nombre_invalido')) setError('El nombre del administrador debe tener al menos 3 caracteres.');
+      else if (message.includes('telefono_invalido')) setError('Ingresa un número celular de 9 dígitos.');
+      else if (message.includes('usuario_invalido')) setError('El usuario debe tener al menos 3 caracteres.');
+      else if (message.includes('usuario_clave_duplicados')) setError('Esa combinación de usuario y contraseña ya está en uso. Elige otra contraseña.');
+      else if (message.includes('password_invalida')) setError(PASSWORD_REQUIREMENTS);
+      else setError('No se pudo completar el registro. Inténtalo nuevamente.');
+      return;
+    }
     clearSession();
     setDone(true);
   };

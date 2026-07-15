@@ -33,6 +33,18 @@ function notificationLine(value: string, maxLength = 60): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1).trimEnd()}…` : value;
 }
 
+function tenantCanReceiveNotifications(tenant: {
+  status?: string;
+  trial_ends_at?: string | null;
+  plan_ends_at?: string | null;
+} | null): boolean {
+  if (!tenant) return false;
+  const now = Date.now();
+  if (tenant.status === 'trial') return Boolean(tenant.trial_ends_at) && new Date(tenant.trial_ends_at!).getTime() >= now;
+  if (tenant.status === 'active') return !tenant.plan_ends_at || new Date(tenant.plan_ends_at).getTime() >= now;
+  return false;
+}
+
 Deno.serve(async request => {
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (request.headers.get('x-cron-secret') !== cronSecret) {
@@ -45,13 +57,14 @@ Deno.serve(async request => {
   const lastCompletedNight = lastNightDate.toISOString().slice(0, 10);
   const { data: hotels, error: hotelError } = await supabase
     .from('hotel_config')
-    .select('tenant_id, notification_time')
+    .select('tenant_id, notification_time, tenants(status, trial_ends_at, plan_ends_at)')
     .eq('notifications_enabled', true);
 
   if (hotelError) throw hotelError;
   const results: Array<Record<string, unknown>> = [];
 
   for (const hotel of hotels ?? []) {
+    if (!tenantCanReceiveNotifications(hotel.tenants)) continue;
     const configuredTime = String(hotel.notification_time || '07:00').slice(0, 5);
     if (now.time < configuredTime) continue;
 

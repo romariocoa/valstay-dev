@@ -8,6 +8,7 @@ import {
   getTenants, createTenant, deleteTenant, Tenant,
   getUsers, createUser, updateUser, deleteUser, AppUserRecord,
   createRegistrationInvite,
+  isValidPassword, PASSWORD_REQUIREMENTS,
 } from '../lib/auth';
 import { TenantAdminPanel } from './TenantAdminPanel';
 
@@ -59,6 +60,10 @@ function TenantUsersPanel({ tenantId, tenantName }: { tenantId: string; tenantNa
       setErr('Todos los campos son obligatorios.');
       return;
     }
+    if (!isValidPassword(newPassword)) {
+      setErr(PASSWORD_REQUIREMENTS);
+      return;
+    }
     setCreating(true);
     const { error } = await createUser(newUsername, newPassword, newRole, newDisplay, tenantId);
     setCreating(false);
@@ -70,6 +75,10 @@ function TenantUsersPanel({ tenantId, tenantName }: { tenantId: string; tenantNa
 
   const handleSave = async () => {
     if (!editing) return;
+    if (editing.password && !isValidPassword(editing.password)) {
+      setErr(PASSWORD_REQUIREMENTS);
+      return;
+    }
     setSaving(true);
     const { error } = await updateUser(editing.id, {
       role: editing.role,
