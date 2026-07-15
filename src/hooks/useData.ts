@@ -10,6 +10,7 @@ export function useRooms(tenantId: string | null) {
     if (!tenantId) { setRooms([]); setLoading(false); return; }
     try {
       setLoading(true);
+      setError(null);
       const { data, error: fetchError } = await getClient()
         .from('rooms')
         .select('*')
@@ -18,6 +19,7 @@ export function useRooms(tenantId: string | null) {
 
       if (fetchError) throw fetchError;
       setRooms(data || []);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error fetching rooms');
     } finally {

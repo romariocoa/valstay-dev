@@ -115,7 +115,7 @@ function App() {
     : null;
   const effectiveSidebarPinned = isDesktop && sidebarPinned;
 
-  const { rooms, loading: roomsLoading, error: roomsError, refetch: refetchRooms } = useRooms(tenantId);
+  const { rooms, loading: roomsLoading, refetch: refetchRooms } = useRooms(tenantId);
   const { stays, loading: staysLoading, refetch: refetchStays } = useActiveStays(tenantId);
  const {
   config: hotelConfig,
@@ -958,12 +958,6 @@ if (checkSuperuser(currentUser)) {
               </button>
             ) : null}
           </div>
-
-          {roomsError && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
-              <p className="text-red-700 dark:text-red-400">{roomsError}</p>
-            </div>
-          )}
 
           {activeTab === 'dashboard' && (
             roomsLoading && rooms.length === 0 ? (
