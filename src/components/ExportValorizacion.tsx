@@ -331,6 +331,7 @@ const [loadingWorkerTypes, setLoadingWorkerTypes] = useState(false);
 
 const canExport =
   dayCount > 0 &&
+  endDate <= lastNightStr &&
   !!selectedEmpresa &&
   workerTypesPresent.length > 0 &&
   workerTypesPresent.every(type => tarifas[type] > 0);

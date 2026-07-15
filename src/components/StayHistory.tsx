@@ -107,10 +107,8 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     : valuationStart > valuationEnd
       ? 'La fecha inicial no puede ser posterior a la fecha final.'
       : valuationEnd > lastCompletedNightStr()
-        ? 'La fecha final máxima es la última noche completada: ayer.'
-        : valuationDayDifference > 30
-          ? 'El rango máximo permitido es de 31 días.'
-          : '';
+        ? 'La fecha final máxima es ayer.'
+        : '';
   const valuationDays = valuationError ? [] : Array.from(
     { length: valuationDayDifference + 1 },
     (_, index) => {
@@ -395,7 +393,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
             </div>
             <div>
               <p className="font-bold text-gray-800 dark:text-zinc-100">Visualizar valorización</p>
-              <p className="text-xs text-gray-500 dark:text-zinc-400">Consulta noches por huésped en un rango máximo de 31 días.</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400">Consulta noches por huésped en el rango de fechas que necesites.</p>
             </div>
           </div>
         </div>
