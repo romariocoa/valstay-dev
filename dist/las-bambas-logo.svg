@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 230" role="img" aria-label="Las Bambas">
-  <rect width="360" height="230" fill="white"/>
-  <path d="M28 145C45 92 62 61 85 53c9-3 18 0 25 8-22 18-36 45-48 84z" fill="#a7ad22"/>
-  <path d="M72 145C93 71 119 40 151 39c11 0 20 5 28 15-29 17-50 48-65 91z" fill="#f15a24"/>
-  <path d="M116 144C139 47 173 13 211 17c38 5 63 51 74 112l-28 7c-13-52-31-83-52-85-21-2-42 29-61 93z" fill="#df123f"/>
-  <path d="M92 143c54 20 142 19 211-4 20-7 28-18 33-33 10 17 9 31-3 42-33 31-183 39-241-5z" fill="#173d78"/>
-  <text x="180" y="211" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="43" font-weight="800" fill="#d91543">LAS BAMBAS</text>
-</svg>
