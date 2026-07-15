@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Analytics } from '@vercel/analytics/react';
 import App from './App.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
 import { InviteRegistration } from './components/InviteRegistration.tsx';
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       {window.location.pathname === '/inicio' ? <LandingPage /> : window.location.pathname === '/registro' ? <InviteRegistration /> : <App />}
+      <Analytics />
     </ThemeProvider>
   </StrictMode>
 );
