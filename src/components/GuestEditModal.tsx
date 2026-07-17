@@ -9,6 +9,7 @@ interface GuestEditModalProps {
 }
 
 export function GuestEditModal({ guest, onClose, onSave }: GuestEditModalProps) {
+  const [dni, setDni] = useState(guest.dni);
   const [name, setName] = useState(guest.name);
   const [phone, setPhone] = useState(guest.phone || '');
   const [email, setEmail] = useState(guest.email || '');
@@ -17,15 +18,39 @@ export function GuestEditModal({ guest, onClose, onSave }: GuestEditModalProps) 
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
+    if (!/^\d{8}$/.test(dni)) { setError('El DNI debe tener exactamente 8 dígitos'); return; }
     if (!name.trim()) { setError('El nombre es obligatorio'); return; }
     setError(null);
     setLoading(true);
+
+    if (dni !== guest.dni) {
+      const { data: existingGuest, error: lookupError } = await getClient()
+        .from('guests')
+        .select('id')
+        .eq('dni', dni)
+        .neq('id', guest.id)
+        .maybeSingle();
+      if (lookupError) {
+        setLoading(false);
+        setError('No se pudo validar el DNI. Inténtalo nuevamente.');
+        return;
+      }
+      if (existingGuest) {
+        setLoading(false);
+        setError('El DNI ya existe');
+        return;
+      }
+    }
+
     const { error: err } = await getClient()
       .from('guests')
-      .update({ name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, address: address.trim() || null })
+      .update({ dni, name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, address: address.trim() || null })
       .eq('id', guest.id);
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      setError(err.code === '23505' || err.message.toLowerCase().includes('duplicate') ? 'El DNI ya existe' : err.message);
+      return;
+    }
     onSave();
     onClose();
   };
@@ -47,9 +72,11 @@ export function GuestEditModal({ guest, onClose, onSave }: GuestEditModalProps) 
               <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-zinc-600" />
               <input
                 type="text"
-                value={guest.dni}
-                disabled
-                className="w-full pl-10 py-2.5 border border-gray-200 dark:border-zinc-700 rounded-lg bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-zinc-500"
+                value={dni}
+                onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                inputMode="numeric"
+                maxLength={8}
+                className="w-full pl-10 py-2.5 border border-gray-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -123,7 +150,7 @@ export function GuestEditModal({ guest, onClose, onSave }: GuestEditModalProps) 
           </button>
           <button
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || dni.length !== 8 || !name.trim()}
             className="flex-1 py-2.5 px-4 bg-blue-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-blue-700"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

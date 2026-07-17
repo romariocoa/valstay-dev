@@ -866,7 +866,7 @@ if (checkSuperuser(currentUser)) {
       </aside>
 
       {/* Mobile Header */}
-      <header className="fixed top-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 shadow-sm dark:shadow-zinc-800/50">
+      <header className="fixed top-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 shadow-sm dark:shadow-zinc-800/50 lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => setSidebarOpen(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
             <Menu className="w-5 h-5 text-gray-600 dark:text-zinc-400" />
@@ -904,7 +904,7 @@ if (checkSuperuser(currentUser)) {
 
       {/* Main Content */}
       <main
-  className={`pt-16 transition-all duration-300 ${
+  className={`pt-16 lg:pt-0 transition-all duration-300 ${
     sidebarOpen ? 'lg:ml-64' : 'lg:ml-0'
   }`}
 >
@@ -1103,6 +1103,11 @@ if (checkSuperuser(currentUser)) {
               rooms={rooms}
               canDelete={canDeleteHistory(currentUser)}
               canValorizacion={canExportValorizacion(currentUser) || demo}
+              canEditStays={currentUser.role === 'admin' && !demo}
+              sessionToken={currentUser.sessionToken}
+              onStaysUpdated={async () => {
+                await Promise.all([refetchStays(), refetchRooms()]);
+              }}
               onExportValorizacion={(options) => {
                 if (!options) return;
                 setExportOptions(options);

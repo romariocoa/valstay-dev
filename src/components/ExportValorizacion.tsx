@@ -229,9 +229,11 @@ export function ExportValorizacion({ tenantId, onClose, initialEmpresa, initialS
   const [selectedEmpresa, setSelectedEmpresa] = useState(initialEmpresa ?? '');
   const [tarifaObrero, setTarifaObrero] = useState('41.20');
   const [workerTypesPresent, setWorkerTypesPresent] = useState<WorkerType[]>([]);
-const [loadingWorkerTypes, setLoadingWorkerTypes] = useState(false);
+  const [loadingWorkerTypes, setLoadingWorkerTypes] = useState(false);
   const [tarifaEmpleado, setTarifaEmpleado] = useState('48');
   const [tarifaStaff, setTarifaStaff] = useState('65.50');
+  const [ratesCompany, setRatesCompany] = useState('');
+  const [savingRates, setSavingRates] = useState(false);
   const [empresas,        setEmpresas]        = useState<string[]>([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
   const [hotelConfig,     setHotelConfig]     = useState<HotelConfig | null>(null);
@@ -274,6 +276,64 @@ const [loadingWorkerTypes, setLoadingWorkerTypes] = useState(false);
       }
     });
 }, [tenantId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRates = async () => {
+      setRatesCompany('');
+      if (!selectedEmpresa) return;
+
+      const { data, error: ratesError } = await getClient()
+        .from('company_valuation_rates')
+        .select('obrero_rate, empleado_rate, staff_rate')
+        .eq('tenant_id', tenantId)
+        .eq('company_name', selectedEmpresa)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (ratesError) {
+        setError('No se pudieron cargar las tarifas guardadas.');
+        return;
+      }
+
+      setTarifaObrero(data ? String(data.obrero_rate) : '41.20');
+      setTarifaEmpleado(data ? String(data.empleado_rate) : '48');
+      setTarifaStaff(data ? String(data.staff_rate) : '65.50');
+      setRatesCompany(selectedEmpresa);
+    };
+
+    loadRates();
+    return () => { cancelled = true; };
+  }, [selectedEmpresa, tenantId]);
+
+  useEffect(() => {
+    if (!selectedEmpresa || ratesCompany !== selectedEmpresa) return;
+
+    const values = [tarifaObrero, tarifaEmpleado, tarifaStaff].map(Number);
+    if (values.some(value => !Number.isFinite(value) || value < 0)) return;
+
+    const timeout = window.setTimeout(async () => {
+      setSavingRates(true);
+      const { error: saveError } = await getClient()
+        .from('company_valuation_rates')
+        .upsert({
+          tenant_id: tenantId,
+          company_name: selectedEmpresa,
+          obrero_rate: values[0],
+          empleado_rate: values[1],
+          staff_rate: values[2],
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'tenant_id,company_name' });
+
+      if (saveError) setError('No se pudieron guardar las tarifas.');
+      setSavingRates(false);
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [tarifaObrero, tarifaEmpleado, tarifaStaff, selectedEmpresa, ratesCompany, tenantId]);
+
   useEffect(() => {
   const loadWorkerTypes = async () => {
     if (!selectedEmpresa || !startDate || !endDate) {
@@ -905,7 +965,8 @@ for (const sr of summaryRows) {
     )}
 
     <p className="text-xs text-gray-400 dark:text-zinc-500">
-      El día de salida no se cobra. Solo se cobran las noches pernoctadas.
+      {savingRates ? 'Guardando tarifas…' : 'Las tarifas se guardan automáticamente por empresa.'}
+      {' '}El día de salida no se cobra. Solo se cobran las noches pernoctadas.
     </p>
   </div>
 )}

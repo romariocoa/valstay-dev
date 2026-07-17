@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStayHistory, useStays } from '../hooks/useData';
 import { Room, getClient } from '../lib/supabase';
+import { StayDateEditor } from './StayDateEditor';
 import {
   Calendar,
   Building2,
@@ -17,6 +18,7 @@ import {
   X,
   ArrowUpDown,
   Banknote,
+  Pencil,
 } from 'lucide-react';
 
 const fmtDate = (d: string, opts: Intl.DateTimeFormatOptions) =>
@@ -53,14 +55,17 @@ interface StayHistoryProps {
   rooms: Room[];
   canDelete?: boolean;
   canValorizacion?: boolean;
+  canEditStays?: boolean;
+  sessionToken?: string;
+  onStaysUpdated?: () => Promise<void> | void;
   onExportValorizacion?: (options?: { empresa: string; startDate: string; endDate: string }) => void;
 }
 
-type Tab = 'particulares' | 'empresas' | 'reporte_empresa';
+type Tab = 'particulares' | 'empresas' | 'reporte_empresa' | 'editar_estancias';
 
-export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacion = false, onExportValorizacion }: StayHistoryProps) {
+export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacion = false, canEditStays = false, sessionToken, onStaysUpdated, onExportValorizacion }: StayHistoryProps) {
   const { stays, loading, refetch } = useStayHistory(tenantId);
-  const { stays: allStays, loading: valuationLoading } = useStays(tenantId);
+  const { stays: allStays, loading: valuationLoading, refetch: refetchAllStays } = useStays(tenantId);
   const [tab, setTab] = useState<Tab>('reporte_empresa');
 
   // Shared filters
@@ -154,6 +159,10 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     return { stay: first, values, total: values.reduce<number>((sum, value) => sum + value, 0) };
   }).filter(row => row.total > 0)
     .sort((a, b) => a.stay.guests.name.localeCompare(b.stay.guests.name, 'es'));
+  const valuationDayTotals = valuationDays.map((_, dayIndex) =>
+    valuationRows.reduce((sum, row) => sum + row.values[dayIndex], 0)
+  );
+  const valuationGrandTotal = valuationRows.reduce((sum, row) => sum + row.total, 0);
 
   // Filter particulares
   const filteredParticulares = particulares.filter(s => {
@@ -297,9 +306,32 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     </span>
   </button>
 
+  {canEditStays && sessionToken && <button
+    onClick={() => {
+      setTab('editar_estancias');
+      setExpandedId(null);
+    }}
+    className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+      tab === 'editar_estancias'
+        ? 'bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 shadow-sm'
+        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
+    }`}
+  >
+    <Pencil className="w-4 h-4" />
+    Editar estancias
+  </button>}
+
 </div>
 
-      {loading ? (
+      {tab === 'editar_estancias' && sessionToken ? (
+        <StayDateEditor
+          stays={allStays}
+          sessionToken={sessionToken}
+          onUpdated={async () => {
+            await Promise.all([refetch(), refetchAllStays(), onStaysUpdated?.()]);
+          }}
+        />
+      ) : loading ? (
         <div className="flex items-center justify-center py-16">
           <RefreshCw className="w-7 h-7 text-gray-400 dark:text-zinc-600 animate-spin" />
         </div>
@@ -461,6 +493,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
                           {group.label}
                         </th>
                       ))}
+                      <th rowSpan={2} className="sticky right-0 z-10 w-14 min-w-14 border-l border-gray-200 bg-gray-50 px-1 py-2 text-center font-bold text-gray-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">DÍAS</th>
                     </tr>
                     <tr className="border-b border-gray-200 dark:border-zinc-700">
                       {valuationDays.map(day => (
@@ -482,9 +515,19 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
                             {value || ''}
                           </td>
                         ))}
+                        <td className="sticky right-0 w-14 min-w-14 border-l border-gray-200 bg-white px-1 py-2 text-center font-black text-gray-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">{row.total}</td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="sticky bottom-0 z-20 border-t-2 border-gray-300 bg-gray-50 font-black text-gray-700 shadow-[0_-2px_6px_rgba(0,0,0,0.08)] dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
+                      <td colSpan={4} className="sticky left-0 z-30 bg-gray-50 px-2 py-2.5 text-right text-[9px] uppercase dark:bg-zinc-800">Huéspedes por día</td>
+                      {valuationDayTotals.map((total, dayIndex) => (
+                        <td key={valuationDays[dayIndex]} className="w-7 min-w-7 px-0.5 py-2.5 text-center text-[10px]">{total}</td>
+                      ))}
+                      <td className="sticky right-0 z-30 w-14 min-w-14 border-l border-gray-300 bg-gray-100 px-1 py-2.5 text-center text-[10px] dark:border-zinc-600 dark:bg-zinc-700">{valuationGrandTotal}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
