@@ -640,8 +640,8 @@ if (checkSuperuser(currentUser)) {
   const navItems: NavItem[] = [
     { tab: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard, visible: true },
     { tab: 'stays',     label: 'Huespedes',    icon: Users,           visible: canViewStays(currentUser) },
-    { tab: 'history',   label: 'Reportes', icon: BarChart3, visible: adminView },
     { tab: 'settings',  label: 'Habitaciones', icon: Building2,       visible: adminView },
+    { tab: 'history',   label: 'Reportes', icon: BarChart3, visible: adminView },
     { tab: 'users',     label: 'Usuarios',     icon: UsersRound,      visible: adminView },
     { tab: 'config',    label: 'Configuración', icon: Settings,       visible: adminView },
   ];
