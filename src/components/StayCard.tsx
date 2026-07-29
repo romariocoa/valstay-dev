@@ -3,6 +3,9 @@ import { getClient, StayWithDetails } from '../lib/supabase';
 import { Calendar, Bed, LogOut, Clock, AlertTriangle, Loader2, Building2, Edit2, CalendarClock, Check, ArrowLeftRight, Phone } from 'lucide-react';
 import { GuestEditModal } from './GuestEditModal';
 import { AppUser, canEditGuests, canChangeRoom } from '../lib/auth';
+import { SameDayCheckoutModal } from './SameDayCheckoutModal';
+import { CheckoutConfirmationModal } from './CheckoutConfirmationModal';
+import { RoomChangeConfirmationModal } from './RoomChangeConfirmationModal';
 
 interface StayCardProps {
   stay: StayWithDetails;
@@ -54,11 +57,13 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   const [showEditDate, setShowEditDate] = useState(false);
   const [editDate, setEditDate] = useState('');
   const [editDateLoading, setEditDateLoading] = useState(false);
-  const [showChangeRoom, setShowChangeRoom] = useState(false);
   const [newRoomId, setNewRoomId] = useState('');
   const [changeRoomLoading, setChangeRoomLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<{ id: string; number: string; type: string; floor: number }[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
+  const [showSameDayCheckout, setShowSameDayCheckout] = useState(false);
+  const [regularCheckoutLastNight, setRegularCheckoutLastNight] = useState<string | null>(null);
+  const [roomChangeConfirmation, setRoomChangeConfirmation] = useState(false);
 
   // Use local date noon-to-noon to avoid UTC/timezone drift
   const todayStr = localDateStr(new Date());
@@ -105,18 +110,23 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
       const isSameDay = lastNightStr < stay.check_in_date;
 
       if (isSameDay) {
-        if (!confirm(
-          'Confirmar salida del huesped?\n\n' +
-          'Esta salida no se registrará en el historial. ¿Deseas continuar?'
-        )) return;
-        await getClient().from('stays').delete().eq('id', stay.id);
-        await getClient().from('rooms').update({ status: 'available' }).eq('id', stay.room_id);
-        onUpdate();
+        setShowSameDayCheckout(true);
         return;
       }
 
-      if (!confirm('Confirmar salida del huesped?')) return;
+      setRegularCheckoutLastNight(lastNightStr);
+    } catch (err) {
+      console.error('Error preparing checkout:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const confirmRegularCheckout = async () => {
+    if (!regularCheckoutLastNight) return;
+    setLoading(true);
+    try {
+      const lastNightStr = regularCheckoutLastNight;
       const updates: Record<string, unknown> = { status: 'completed' };
 
       if (lastNightStr !== stay.check_out_date) {
@@ -146,9 +156,32 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
 
       await getClient().from('stays').update(updates).eq('id', stay.id);
       await getClient().from('rooms').update({ status: 'cleaning' }).eq('id', stay.room_id);
+      setRegularCheckoutLastNight(null);
       onUpdate();
     } catch (err) {
       console.error('Error checking out:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resolveSameDayCheckout = async (registerStay: boolean) => {
+    setLoading(true);
+    try {
+      if (registerStay) {
+        await getClient()
+          .from('stays')
+          .update({ status: 'completed', check_out_date: stay.check_in_date })
+          .eq('id', stay.id);
+        await getClient().from('rooms').update({ status: 'cleaning' }).eq('id', stay.room_id);
+      } else {
+        await getClient().from('stays').delete().eq('id', stay.id);
+        await getClient().from('rooms').update({ status: 'available' }).eq('id', stay.room_id);
+      }
+      setShowSameDayCheckout(false);
+      onUpdate();
+    } catch (err) {
+      console.error('Error checking out same-day stay:', err);
     } finally {
       setLoading(false);
     }
@@ -191,28 +224,23 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   const handleOpenChangeRoom = async () => {
     setLoadingRooms(true);
     setNewRoomId('');
+    setRoomChangeConfirmation(true);
     const { data } = await getClient()
       .from('rooms')
       .select('id, number, type, floor')
       .eq('status', 'available');
     setAvailableRooms((data ?? []).filter((r: { type: string }) => !SPACE_TYPES.includes(r.type)));
     setLoadingRooms(false);
-    setShowChangeRoom(true);
   };
 
-  const handleChangeRoom = async () => {
-    if (!newRoomId) return;
-    const newRoom = availableRooms.find(r => r.id === newRoomId);
-    if (!newRoom) return;
-    if (!confirm(
-      `¿Seguro que deseas cambiar al huésped de la habitación ${stay.rooms?.number ?? '?'} a la habitación ${newRoom.number}?`
-    )) return;
+  const confirmChangeRoom = async () => {
+    if (!roomChangeConfirmation || !newRoomId) return;
     setChangeRoomLoading(true);
     try {
       await getClient().from('stays').update({ room_id: newRoomId }).eq('id', stay.id);
       await getClient().from('rooms').update({ status: 'available' }).eq('id', stay.room_id);
       await getClient().from('rooms').update({ status: 'occupied' }).eq('id', newRoomId);
-      setShowChangeRoom(false);
+      setRoomChangeConfirmation(false);
       setNewRoomId('');
       onUpdate();
     } catch (err) {
@@ -354,48 +382,6 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
           </div>
         )}
 
-        {/* Cambiar habitación inline panel */}
-        {showChangeRoom && (
-          <div className="mb-3 p-3 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 rounded-lg space-y-2">
-            <p className="text-xs font-medium text-violet-700 dark:text-violet-400">Seleccionar nueva habitación</p>
-            {loadingRooms ? (
-              <div className="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando habitaciones...
-              </div>
-            ) : availableRooms.length === 0 ? (
-              <p className="text-xs text-gray-500 dark:text-zinc-400">No hay habitaciones disponibles.</p>
-            ) : (
-              <select
-                value={newRoomId}
-                onChange={e => setNewRoomId(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-violet-300 dark:border-violet-600 rounded-lg bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                autoFocus
-              >
-                <option value="">-- Seleccionar habitación --</option>
-                {availableRooms.map(r => (
-                  <option key={r.id} value={r.id}>Hab. {r.number} — Piso {r.floor}</option>
-                ))}
-              </select>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={handleChangeRoom}
-                disabled={!newRoomId || changeRoomLoading}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                {changeRoomLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Confirmar cambio
-              </button>
-              <button
-                onClick={() => { setShowChangeRoom(false); setNewRoomId(''); }}
-                className="px-3 py-1.5 text-sm text-violet-700 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-800/40 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Footer */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 dark:border-zinc-800 pt-3">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -420,7 +406,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {!showEditDate && !showChangeRoom && (
+            {!showEditDate && (
               <button
                 onClick={() => { setShowEditDate(true); setEditDate(departureDateStr); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-blue-400 text-blue-600 dark:text-blue-400 rounded-lg text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors font-semibold whitespace-nowrap"
@@ -442,6 +428,53 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
           </div>
         </div>
       </div>
+
+      {showSameDayCheckout && (
+        <SameDayCheckoutModal
+          guestName={stay.guests.name}
+          roomNumber={stay.rooms?.number}
+          loading={loading}
+          onRegister={() => void resolveSameDayCheckout(true)}
+          onDiscard={() => void resolveSameDayCheckout(false)}
+          onCancel={() => setShowSameDayCheckout(false)}
+        />
+      )}
+
+      {regularCheckoutLastNight && (
+        <CheckoutConfirmationModal
+          guestName={stay.guests.name}
+          roomNumber={stay.rooms?.number}
+          checkInDate={stay.check_in_date}
+          totalDays={Math.max(
+            1,
+            Math.round(
+              (new Date(`${regularCheckoutLastNight}T12:00:00`).getTime() -
+                new Date(`${stay.check_in_date}T12:00:00`).getTime()) /
+                86400000
+            ) + 1
+          )}
+          loading={loading}
+          onConfirm={() => void confirmRegularCheckout()}
+          onCancel={() => setRegularCheckoutLastNight(null)}
+        />
+      )}
+
+      {roomChangeConfirmation && (
+        <RoomChangeConfirmationModal
+          guestName={stay.guests.name}
+          currentRoom={stay.rooms?.number ?? 'Sin asignar'}
+          availableRooms={availableRooms}
+          selectedRoomId={newRoomId}
+          loadingRooms={loadingRooms}
+          loading={changeRoomLoading}
+          onRoomChange={setNewRoomId}
+          onConfirm={() => void confirmChangeRoom()}
+          onCancel={() => {
+            setRoomChangeConfirmation(false);
+            setNewRoomId('');
+          }}
+        />
+      )}
 
       {showEdit && (
         <GuestEditModal

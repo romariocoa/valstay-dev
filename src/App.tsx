@@ -13,6 +13,8 @@ import { UserManager } from './components/UserManager';
 import { HotelConfig } from './components/HotelConfig';
 import { ExportValorizacion } from './components/ExportValorizacion';
 import { TenantMessages } from './components/TenantMessages';
+import { SameDayCheckoutModal } from './components/SameDayCheckoutModal';
+import { CheckoutConfirmationModal } from './components/CheckoutConfirmationModal';
 import { useTheme } from './context/ThemeContext';
 import {
   AppUser, getSession, logout, validateSession, clearSession,
@@ -109,6 +111,14 @@ function App() {
   const [guestSearch, setGuestSearch] = useState('');
   const [showDepartureCards, setShowDepartureCards] = useState(true);
   const [sidebarPuchiBlinking, setSidebarPuchiBlinking] = useState(false);
+  const [sameDayCheckout, setSameDayCheckout] = useState<{ room: Room; stay: StayWithDetails } | null>(null);
+  const [sameDayCheckoutLoading, setSameDayCheckoutLoading] = useState(false);
+  const [checkoutConfirmation, setCheckoutConfirmation] = useState<{
+    room: Room;
+    stay: StayWithDetails;
+    lastNightStr: string;
+  } | null>(null);
+  const [checkoutConfirmationLoading, setCheckoutConfirmationLoading] = useState(false);
   const tenantId = currentUser?.tenantId ?? null;
   const notificationOptOutKey = currentUser && tenantId
     ? `push_notifications_disabled_${tenantId}_${currentUser.id}`
@@ -541,20 +551,17 @@ if (checkSuperuser(currentUser)) {
     const isSameDay = lastNightStr < stay.check_in_date;
 
     if (isSameDay) {
-      if (!confirm(
-        `Confirmar salida del huesped ${stay.guests.name} de habitacion ${room.number}?\n\n` +
-        `Esta salida no se registrará en el historial. ¿Deseas continuar?`
-      )) return;
-      // Delete the stay entirely and free the room
-      await getClient().from('stays').delete().eq('id', stay.id);
-      await getClient().from('rooms').update({ status: 'available' }).eq('id', room.id);
-      refetchRooms();
-      refetchStays();
+      setSameDayCheckout({ room, stay });
       return;
     }
 
-    if (!confirm(`Confirmar salida del huesped ${stay.guests.name} de habitacion ${room.number}?`)) return;
+    setCheckoutConfirmation({ room, stay, lastNightStr });
+  };
 
+  const confirmRegularCheckout = async () => {
+    if (!checkoutConfirmation) return;
+    const { room, stay, lastNightStr } = checkoutConfirmation;
+    setCheckoutConfirmationLoading(true);
     const stayUpdates: Record<string, unknown> = { status: 'completed' };
 
 
@@ -586,11 +593,36 @@ if (checkSuperuser(currentUser)) {
       }
     }
 
-    await getClient().from('stays').update(stayUpdates).eq('id', stay.id);
-    await getClient().from('rooms').update({ status: 'cleaning' }).eq('id', room.id);
+    try {
+      await getClient().from('stays').update(stayUpdates).eq('id', stay.id);
+      await getClient().from('rooms').update({ status: 'cleaning' }).eq('id', room.id);
+      setCheckoutConfirmation(null);
+      await Promise.all([refetchRooms(), refetchStays()]);
+    } finally {
+      setCheckoutConfirmationLoading(false);
+    }
+  };
 
-    refetchRooms();
-    refetchStays();
+  const resolveSameDayCheckout = async (registerStay: boolean) => {
+    if (!sameDayCheckout) return;
+    const { room, stay } = sameDayCheckout;
+    setSameDayCheckoutLoading(true);
+    try {
+      if (registerStay) {
+        await getClient()
+          .from('stays')
+          .update({ status: 'completed', check_out_date: stay.check_in_date })
+          .eq('id', stay.id);
+        await getClient().from('rooms').update({ status: 'cleaning' }).eq('id', room.id);
+      } else {
+        await getClient().from('stays').delete().eq('id', stay.id);
+        await getClient().from('rooms').update({ status: 'available' }).eq('id', room.id);
+      }
+      setSameDayCheckout(null);
+      await Promise.all([refetchRooms(), refetchStays()]);
+    } finally {
+      setSameDayCheckoutLoading(false);
+    }
   };
 
   const handleCheckInSuccess = () => {
@@ -670,6 +702,34 @@ if (checkSuperuser(currentUser)) {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-zinc-950">
+      {sameDayCheckout && (
+        <SameDayCheckoutModal
+          guestName={sameDayCheckout.stay.guests.name}
+          roomNumber={sameDayCheckout.room.number}
+          loading={sameDayCheckoutLoading}
+          onRegister={() => void resolveSameDayCheckout(true)}
+          onDiscard={() => void resolveSameDayCheckout(false)}
+          onCancel={() => setSameDayCheckout(null)}
+        />
+      )}
+      {checkoutConfirmation && (
+        <CheckoutConfirmationModal
+          guestName={checkoutConfirmation.stay.guests.name}
+          roomNumber={checkoutConfirmation.room.number}
+          checkInDate={checkoutConfirmation.stay.check_in_date}
+          totalDays={Math.max(
+            1,
+            Math.round(
+              (new Date(`${checkoutConfirmation.lastNightStr}T12:00:00`).getTime() -
+                new Date(`${checkoutConfirmation.stay.check_in_date}T12:00:00`).getTime()) /
+                86400000
+            ) + 1
+          )}
+          loading={checkoutConfirmationLoading}
+          onConfirm={() => void confirmRegularCheckout()}
+          onCancel={() => setCheckoutConfirmation(null)}
+        />
+      )}
       {/* Sidebar */}
       <aside
   className={`fixed top-0 left-0 z-40 h-screen w-64 bg-white dark:bg-zinc-900 shadow-xl transform transition-transform duration-300 ${
