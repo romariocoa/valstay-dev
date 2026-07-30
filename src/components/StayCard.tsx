@@ -72,6 +72,11 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   const departureDateStr = effectiveDepartureDateStr(stay);
   const departureDay = new Date(departureDateStr + 'T12:00:00');
   const daysRemaining = Math.round((departureDay.getTime() - todayNoon.getTime()) / (1000 * 60 * 60 * 24));
+  const checkInDay = new Date(stay.check_in_date + 'T12:00:00');
+  const nightsStayed = Math.max(
+    0,
+    Math.round((todayNoon.getTime() - checkInDay.getTime()) / (1000 * 60 * 60 * 24)),
+  );
 
   // Separate states: departing today vs overdue vs active
   const isTodayDeparture = daysRemaining === 0;
@@ -342,6 +347,10 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             <Calendar className="w-4 h-4 shrink-0" />
             <span className="truncate">
               {new Date(stay.check_in_date + 'T12:00:00').toLocaleDateString('es-ES')} — {new Date(departureDateStr + 'T12:00:00').toLocaleDateString('es-ES')}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+              <Bed className="h-3.5 w-3.5" />
+              {nightsStayed} {nightsStayed === 1 ? 'noche' : 'noches'}
             </span>
           </div>
           {!stay.empresa && (
