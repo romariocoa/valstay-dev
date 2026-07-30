@@ -75,6 +75,7 @@ const TYPE_LABEL: Record<Room['type'], string> = {
   lavanderia: 'LAVANDERÍA',
   almacen:    'ALMACÉN',
   tienda:     'TIENDA',
+  departamento: 'DEPARTAMENTO',
 };
 const GUEST_TYPES = new Set<Room['type']>(['single', 'double', 'suite', 'family']);
 
@@ -84,6 +85,7 @@ const TYPE_OVERRIDE: Partial<Record<Room['type'], { bg: string; border: string; 
   lavanderia: { bg: 'bg-cyan-50',    border: 'border-cyan-400',   text: 'text-cyan-800',   dot: 'bg-cyan-400' },
   almacen:    { bg: 'bg-amber-50',   border: 'border-amber-400',  text: 'text-amber-800',  dot: 'bg-amber-400' },
   tienda:     { bg: 'bg-pink-50',    border: 'border-pink-400',   text: 'text-pink-800',   dot: 'bg-pink-400' },
+  departamento: { bg: 'bg-indigo-50', border: 'border-indigo-400', text: 'text-indigo-800', dot: 'bg-indigo-400' },
 };
 
 const SPACE_TYPES: { value: Room['type']; label: string; capacity: number; price: number }[] = [
@@ -91,9 +93,7 @@ const SPACE_TYPES: { value: Room['type']; label: string; capacity: number; price
   { value: 'tienda',     label: 'Tienda',      capacity: 10, price: 0 },
   { value: 'lavanderia', label: 'Lavanderia',  capacity: 0,  price: 0 },
   { value: 'almacen',    label: 'Almacen',     capacity: 0,  price: 0 },
-  { value: 'single',     label: 'Individual',  capacity: 1,  price: 80 },
-  { value: 'suite',      label: 'Suite',       capacity: 4,  price: 250 },
-  { value: 'family',     label: 'Familiar',    capacity: 5,  price: 200 },
+  { value: 'departamento', label: 'Departamento', capacity: 0, price: 0 },
 ];
 
 // ── Element configs ───────────────────────────────────────────────────────────

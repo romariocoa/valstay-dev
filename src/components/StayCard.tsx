@@ -224,7 +224,7 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
     }
   };
 
-  const SPACE_TYPES = ['sala', 'tienda', 'lavanderia', 'almacen'];
+  const SPACE_TYPES = ['sala', 'tienda', 'lavanderia', 'almacen', 'departamento'];
 
   const handleOpenChangeRoom = async () => {
     setLoadingRooms(true);

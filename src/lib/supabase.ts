@@ -30,7 +30,7 @@ export type Room = {
   id: string;
   number: string;
   floor: number;
-  type: 'single' | 'double' | 'suite' | 'family' | 'sala' | 'lavanderia' | 'almacen' | 'tienda';
+  type: 'single' | 'double' | 'suite' | 'family' | 'sala' | 'lavanderia' | 'almacen' | 'tienda' | 'departamento';
   capacity: number;
   price_per_night: number;
   status: 'available' | 'occupied' | 'maintenance' | 'cleaning';

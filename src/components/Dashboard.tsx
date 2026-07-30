@@ -101,7 +101,7 @@ export function Dashboard({
     }
   }, [empresas, empresaFilter]);
 
-  const SPACE_TYPES = new Set<Room['type']>(['sala', 'lavanderia', 'almacen', 'tienda']);
+  const SPACE_TYPES = new Set<Room['type']>(['sala', 'lavanderia', 'almacen', 'tienda', 'departamento']);
 
   // Only real guest rooms — excludes internal spaces from all counts
   const guestRooms = rooms.filter(r => !SPACE_TYPES.has(r.type));

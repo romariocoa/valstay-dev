@@ -26,6 +26,7 @@ const typeLabels: Record<Room['type'], string> = {
   lavanderia: 'Lavandería',
   almacen:    'Almacén',
   tienda:     'Tienda',
+  departamento: 'Departamento',
 };
 
 function localDateStr(d: Date = new Date()): string {

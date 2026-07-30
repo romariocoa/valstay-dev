@@ -18,7 +18,7 @@ const roomTypes = [
   { value: 'family', label: 'Familiar',   capacity: 5 },
 ];
 
-const SPACE_TYPES = new Set<Room['type']>(['sala', 'tienda', 'lavanderia', 'almacen']);
+const SPACE_TYPES = new Set<Room['type']>(['sala', 'tienda', 'lavanderia', 'almacen', 'departamento']);
 
 export function RoomManager({
 

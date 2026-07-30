@@ -39,6 +39,7 @@ const typeLabels: Record<Room['type'], string> = {
   lavanderia: 'LAVANDERÍA',
   almacen: 'ALMACÉN',
   tienda: 'TIENDA',
+  departamento: 'DEPARTAMENTO',
 };
 
 export function RoomCard({
