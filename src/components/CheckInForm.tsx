@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { getClient, Room } from '../lib/supabase';
 import { useGuestByDni, useCompanies, useHotelConfig } from '../hooks/useData';
+import { useRucLookup } from '../hooks/useRucLookup';
 import {
   User, CreditCard, Phone, MapPin, Bed, Save, X, Loader2,
   Building2, Plus, CheckCircle, Hash, Trash2, Minus, Banknote, QrCode, Upload, Camera, WalletCards,
+  ChevronRight,
+  FileText,
+  ReceiptText,
 } from 'lucide-react';
 
 interface CheckInFormProps {
@@ -66,11 +70,12 @@ function Input({
 export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCancel, isAdmin = false, readOnly = false, defaultCompany = '' }: CheckInFormProps) {
   const today = localDateStr();
 
+  const [guestFlow, setGuestFlow]             = useState<'empresa' | 'particular' | null>(null);
   const [dni, setDni]                         = useState('');
   const [name, setName]                       = useState('');
   const [phone, setPhone]                     = useState('');
   const [address, setAddress]                 = useState('');
-  const [empresa, setEmpresa]                 = useState(defaultCompany);
+  const [empresa, setEmpresa]                 = useState('');
   const [workerType, setWorkerType] = useState<'obrero' | 'empleado' | 'staff' | ''>('');
   const [newEmpresaName, setNewEmpresaName]   = useState('');
   const [showNewEmpresa, setShowNewEmpresa]   = useState(false);
@@ -84,7 +89,13 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'yape' | 'plin'>('efectivo');
+  const [paymentTiming, setPaymentTiming] = useState<'now' | 'later'>('later');
   const [paymentReceipt, setPaymentReceipt] = useState('');
+  const [receiptType, setReceiptType] = useState<'none' | 'boleta' | 'factura'>('none');
+  const [invoiceRuc, setInvoiceRuc] = useState('');
+  const [invoiceBusinessName, setInvoiceBusinessName] = useState('');
+  const [invoiceFiscalAddress, setInvoiceFiscalAddress] = useState('');
+  const { data: invoiceRucData, loading: invoiceRucLoading, error: invoiceRucError } = useRucLookup(invoiceRuc);
   const receiptFileRef = useRef<HTMLInputElement>(null);
   const receiptCameraRef = useRef<HTMLInputElement>(null);
   const submitting = useRef(false);
@@ -93,6 +104,12 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   const [showManageCompanies, setShowManageCompanies] = useState(false);
   const { companies, addCompany, deleteCompany } = useCompanies(tenantId);
   const { config: hotelConfig } = useHotelConfig(tenantId);
+
+  useEffect(() => {
+    if (!invoiceRucData) return;
+    setInvoiceBusinessName(invoiceRucData.razon_social);
+    setInvoiceFiscalAddress(invoiceRucData.direccion);
+  }, [invoiceRucData]);
 
   // '' = sin seleccionar (bloquea campos), '__particular__' = Particular, 'Nombre' = empresa
   const empresaSelected = empresa !== '';
@@ -233,7 +250,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
     }
 
     if (!empresaSelected) {
-      setError('Selecciona "Particular" o una empresa para continuar.');
+      setError('Selecciona "Huésped directo" o una empresa para continuar.');
       return;
     if (hasEmpresa && !workerType) {
 
@@ -254,6 +271,12 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
     if (checkOutDate <= checkInDate) {
       setError('La fecha de salida debe ser posterior a la de entrada (minimo 1 noche)');
       return;
+    }
+    if (!hasEmpresa && paymentTiming === 'now' && receiptType === 'factura') {
+      if (!/^\d{11}$/.test(invoiceRuc) || !invoiceBusinessName.trim() || !invoiceFiscalAddress.trim()) {
+        setError('Completa el RUC, la razón social y la dirección fiscal para solicitar la factura.');
+        return;
+      }
     }
     if (submitting.current) return;
     submitting.current = true;
@@ -304,6 +327,12 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
         await getClient().from('rooms').update({ price_per_night: effectivePrice }).eq('id', roomId);
       }
 
+      const receiptRequest = !hasEmpresa && paymentTiming === 'now' && receiptType !== 'none'
+        ? receiptType === 'factura'
+          ? { type: receiptType, ruc: invoiceRuc, businessName: invoiceBusinessName.trim(), fiscalAddress: invoiceFiscalAddress.trim() }
+          : { type: receiptType, dni, customerName: name }
+        : null;
+
       const { error: stayError } = await getClient().from('stays').insert({
         guest_id: guestId,
         room_id: roomId,
@@ -313,8 +342,9 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
         total_amount: totalAmount,
         empresa: hasEmpresa ? empresa : null,
         worker_type: hasEmpresa ? workerType : null,
-        payment_method: hasEmpresa ? null : paymentMethod,
-        payment_receipt_url: !hasEmpresa && supportsReceipt && paymentReceipt ? paymentReceipt : null,
+        payment_method: hasEmpresa || paymentTiming === 'later' ? null : paymentMethod,
+        payment_receipt_url: !hasEmpresa && paymentTiming === 'now' && supportsReceipt && paymentReceipt ? paymentReceipt : null,
+        notes: receiptRequest ? `[COMPROBANTE_SOLICITADO] ${JSON.stringify(receiptRequest)}` : null,
         tenant_id: tenantId,
       });
       if (stayError) throw stayError;
@@ -337,13 +367,29 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   const inputBase = 'w-full py-2.5 border border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-gray-800 dark:focus:ring-zinc-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 text-sm';
   const labelBase = 'block text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1';
 
+  const selectGuestFlow = (flow: 'empresa' | 'particular') => {
+    setGuestFlow(flow);
+    setEmpresa(flow === 'particular' ? '__particular__' : defaultCompany);
+    setWorkerType(flow === 'empresa' ? 'obrero' : '');
+    setError(null);
+  };
+
+  const resetGuestFlow = () => {
+    setGuestFlow(null);
+    setEmpresa('');
+    setWorkerType('');
+    setShowNewEmpresa(false);
+    setShowManageCompanies(false);
+    setError(null);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-6 py-4 flex justify-between items-center z-10">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-zinc-100">Registrar Huesped</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-zinc-100">{guestFlow === null ? 'Registrar ingreso' : 'Registrar huésped'}</h2>
             {preselectedRoom && (
               <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-0.5 flex items-center gap-1">
                 <CheckCircle className="w-3.5 h-3.5" />
@@ -356,7 +402,48 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {guestFlow === null ? (
+          <div className="p-5 sm:p-6">
+            <div className="mb-5">
+              <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">¿Qué tipo de huésped deseas registrar?</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Selecciona una opción para continuar con el ingreso.</p>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+              <button
+                type="button"
+                onClick={() => selectGuestFlow('empresa')}
+                className="group flex w-full items-center gap-3 border-b border-gray-200 px-4 py-4 text-left transition-colors hover:bg-blue-50 focus:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:border-zinc-700 dark:hover:bg-blue-950/30 dark:focus:bg-blue-950/30"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 transition-colors group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-900/50 dark:text-blue-300"><Building2 className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-gray-900 dark:text-zinc-100">Empresa</span>
+                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-zinc-400">Personal asociado a una empresa</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600 dark:text-zinc-500 dark:group-hover:text-blue-400" />
+              </button>
+              <button
+                type="button"
+                onClick={() => selectGuestFlow('particular')}
+                className="group flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 dark:hover:bg-emerald-950/30 dark:focus:bg-emerald-950/30"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition-colors group-hover:bg-emerald-600 group-hover:text-white dark:bg-emerald-900/50 dark:text-emerald-300"><User className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-gray-900 dark:text-zinc-100">Huésped directo</span>
+                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-zinc-400">Reserva y pago directo</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-600 dark:text-zinc-500 dark:group-hover:text-emerald-400" />
+              </button>
+            </div>
+          </div>
+        ) : <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/60">
+            <div className="flex items-center gap-2">
+              {guestFlow === 'empresa' ? <Building2 className="h-4 w-4 text-blue-600" /> : <User className="h-4 w-4 text-emerald-600" />}
+              <span className="text-sm font-bold text-gray-800 dark:text-zinc-200">Ingreso {guestFlow === 'empresa' ? 'de empresa' : 'de huésped directo'}</span>
+            </div>
+            <button type="button" onClick={resetGuestFlow} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">Cambiar tipo</button>
+          </div>
 
           {readOnly && (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-200">
@@ -365,7 +452,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
           )}
 
           {/* Empresa */}
-          <div>
+          {guestFlow === 'empresa' && <div>
             <label className="block text-sm font-medium text-gray-600 dark:text-zinc-400 mb-1">Empresa</label>
             {!showNewEmpresa ? (
               <div className="flex gap-2">
@@ -376,8 +463,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                     onChange={(e) => setEmpresa(e.target.value)}
                     className={`${inputBase} pl-10 appearance-none ${!empresaSelected ? 'text-gray-400 dark:text-zinc-500' : ''}`}
                   >
-                    <option value="" disabled>-- Selecciona tipo --</option>
-                    <option value="__particular__">Particular</option>
+                    <option value="" disabled>-- Selecciona empresa --</option>
                     {companies.map(c => (
                       <option key={c.id} value={c.name} className="text-gray-900 dark:text-zinc-100">{c.name}</option>
                     ))}
@@ -457,7 +543,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Guest data */}
           {hasEmpresa && (
@@ -570,7 +656,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
               </div>
             )}
 
-            {!hasEmpresa && selectedRoom && (
+            {guestFlow === 'particular' && selectedRoom && (
               <div>
                 <label className={`${labelBase}`}>
                   Tarifa por noche (S/) *
@@ -685,8 +771,30 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
           {!hasEmpresa && empresaSelected && (
             <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-xl p-4 space-y-4">
               <h3 className="font-semibold text-gray-700 dark:text-zinc-300 flex items-center gap-2 text-sm">
-                <Banknote className="w-4 h-4" /> Tipo de pago
+                <Banknote className="w-4 h-4" /> Pago
               </h3>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={paymentTiming === 'now'}
+                  onChange={event => {
+                    setPaymentTiming(event.target.checked ? 'now' : 'later');
+                    if (!event.target.checked) {
+                      setPaymentReceipt('');
+                      setReceiptType('none');
+                    }
+                  }}
+                  className="h-5 w-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm font-bold text-gray-700 dark:text-zinc-200">Pagar ahora</span>
+              </label>
+              {paymentTiming === 'later' && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                  La estancia se registrará con un pago pendiente visible en su tarjeta.
+                </p>
+              )}
+              {paymentTiming === 'now' && <>
+              <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">Selecciona el medio de pago</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
                   { method: 'efectivo' as const, label: 'Efectivo', icon: Banknote, active: 'border-emerald-600 bg-emerald-600 text-white', logo: 'text-emerald-600 bg-emerald-100' },
@@ -722,6 +830,47 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
                   {paymentReceipt && <div className="relative w-fit mx-auto"><img src={paymentReceipt} alt="Comprobante" className="max-h-48 rounded-xl border border-gray-200 dark:border-zinc-700" /><button type="button" onClick={() => setPaymentReceipt('')} className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full"><X className="w-3 h-3" /></button></div>}
                 </div>
               )}
+
+              <div className="space-y-3 border-t border-gray-200 pt-4 dark:border-zinc-700">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-zinc-200">¿Desea comprobante?</p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">Es opcional y no interrumpe el registro.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {([
+                    { value: 'none' as const, label: 'Sin comprobante', icon: X },
+                    { value: 'boleta' as const, label: 'Boleta', icon: ReceiptText },
+                    { value: 'factura' as const, label: 'Factura', icon: FileText },
+                  ]).map(option => {
+                    const OptionIcon = option.icon;
+                    const selected = receiptType === option.value;
+                    return (
+                      <button key={option.value} type="button" onClick={() => setReceiptType(option.value)} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition-colors ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>
+                        <OptionIcon className="h-4 w-4" />{option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {receiptType === 'boleta' && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                    La boleta se solicitará a nombre de <strong>{name || 'el huésped'}</strong>{dni ? `, DNI ${dni}` : ''}.
+                  </div>
+                )}
+
+                {receiptType === 'factura' && (
+                  <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                    <label className={labelBase}>RUC *<div className="relative mt-1"><input value={invoiceRuc} onChange={event => setInvoiceRuc(event.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" placeholder="11 dígitos" className={`${inputBase} px-3 pr-10`} />{invoiceRucLoading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-500" />}</div>{invoiceRucData && <span className="mt-1 block text-[11px] font-medium text-emerald-600">{invoiceRucData.estado} · {invoiceRucData.condicion}</span>}{invoiceRucError && <span className="mt-1 block text-[11px] text-red-600">{invoiceRucError}</span>}</label>
+                    <label className={labelBase}>Razón social *<input value={invoiceBusinessName} onChange={event => setInvoiceBusinessName(event.target.value)} className={`${inputBase} mt-1 px-3`} /></label>
+                    <label className={labelBase}>Dirección fiscal *<input value={invoiceFiscalAddress} onChange={event => setInvoiceFiscalAddress(event.target.value)} className={`${inputBase} mt-1 px-3`} /></label>
+                  </div>
+                )}
+
+                {receiptType !== 'none' && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">La solicitud quedará guardada. La emisión electrónica se activará al conectar el proveedor SUNAT.</p>
+                )}
+              </div>
+              </>}
             </div>
           )}
 
@@ -750,6 +899,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
   !checkInDate ||
   !checkOutDate ||
   (hasEmpresa && !workerType)
+  || (!hasEmpresa && paymentTiming === 'now' && receiptType === 'factura' && (!/^\d{11}$/.test(invoiceRuc) || !invoiceBusinessName.trim() || !invoiceFiscalAddress.trim()))
 }
               className="flex-1 py-3 bg-gray-900 dark:bg-zinc-700 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-zinc-600 transition-colors font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
             >
@@ -759,7 +909,7 @@ export function CheckInForm({ tenantId, rooms, preselectedRoom, onSuccess, onCan
               }
             </button>
           </div>
-        </form>
+        </form>}
       </div>
     </div>
   );

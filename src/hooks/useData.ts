@@ -229,8 +229,20 @@ const DEFAULT_CONFIG: HotelConfig = {
   firma_url: null,
   yape_qr_url: null, plin_qr_url: null,
   notifications_enabled: false, notification_time: '07:00:00',
+  tax_settings: { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, pse_provider: '', environment: 'test' },
   updated_at: '',
 };
+
+const localTaxSettingsKey = (tenantId: string) => `valstay_tax_settings_${tenantId}`;
+
+function readLocalTaxSettings(tenantId: string): HotelConfig['tax_settings'] | null {
+  try {
+    const stored = window.localStorage.getItem(localTaxSettingsKey(tenantId));
+    return stored ? JSON.parse(stored) as HotelConfig['tax_settings'] : null;
+  } catch {
+    return null;
+  }
+}
 
 export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
   const [config, setConfig] = useState<HotelConfig>(DEFAULT_CONFIG);
@@ -244,7 +256,13 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
       .select('*')
       .eq('tenant_id', tenantId)
       .maybeSingle();
-    if (data) setConfig(data as HotelConfig);
+    if (data) {
+      const remoteConfig = data as HotelConfig;
+      setConfig({
+        ...remoteConfig,
+        tax_settings: remoteConfig.tax_settings ?? readLocalTaxSettings(tenantId) ?? DEFAULT_CONFIG.tax_settings,
+      });
+    }
     setLoading(false);
   }, [tenantId]);
 
@@ -259,6 +277,7 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
     const hasFirmaChange = 'firma_url' in updates;
     const hasPaymentQrChange = 'yape_qr_url' in updates || 'plin_qr_url' in updates;
     const hasNotificationChange = 'notifications_enabled' in updates || 'notification_time' in updates;
+    const hasTaxSettingsChange = 'tax_settings' in updates;
     const hasFieldChange = [
       'name',
       'razon_social',
@@ -315,6 +334,25 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
         p_notification_time: updates.notification_time ?? config.notification_time,
       });
       if (notificationErr) return { error: notificationErr.message };
+    }
+
+    if (hasTaxSettingsChange) {
+      const settings = updates.tax_settings ?? config.tax_settings;
+      const { error: taxErr } = await getClient().rpc('save_hotel_tax_settings', {
+        p_session_token: sessionToken,
+        p_settings: settings,
+      });
+      if (taxErr) {
+        const missingRpc = taxErr.code === 'PGRST202'
+          || taxErr.message.includes('save_hotel_tax_settings')
+          || taxErr.message.includes('schema cache');
+        if (!missingRpc) return { error: taxErr.message };
+        // Temporary test fallback until migration 061 is deployed. These
+        // non-sensitive settings stay only in this browser/device.
+        window.localStorage.setItem(localTaxSettingsKey(tenantId), JSON.stringify(settings));
+      } else {
+        window.localStorage.removeItem(localTaxSettingsKey(tenantId));
+      }
     }
 
     setConfig(prev => ({ ...prev, ...updates }));

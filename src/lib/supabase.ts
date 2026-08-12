@@ -100,5 +100,14 @@ export type HotelConfig = {
   plin_qr_url: string | null;
   notifications_enabled: boolean;
   notification_time: string;
+  tax_settings: {
+    enabled: boolean;
+    invoice_series: string;
+    receipt_series: string;
+    igv_rate: number;
+    prices_include_igv: boolean;
+    pse_provider: string;
+    environment: 'test' | 'production';
+  };
   updated_at: string;
 };

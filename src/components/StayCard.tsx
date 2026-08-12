@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { getClient, StayWithDetails } from '../lib/supabase';
-import { Calendar, Bed, LogOut, Clock, AlertTriangle, Loader2, Building2, Edit2, CalendarClock, Check, ArrowLeftRight, Phone } from 'lucide-react';
+import { Calendar, Bed, LogOut, Clock, AlertTriangle, Loader2, Building2, Edit2, CalendarClock, Check, ArrowLeftRight, Phone, Banknote } from 'lucide-react';
 import { GuestEditModal } from './GuestEditModal';
 import { AppUser, canEditGuests, canChangeRoom } from '../lib/auth';
 import { SameDayCheckoutModal } from './SameDayCheckoutModal';
 import { CheckoutConfirmationModal } from './CheckoutConfirmationModal';
 import { RoomChangeConfirmationModal } from './RoomChangeConfirmationModal';
+import { ReceiptChoiceModal, ReceiptRequest } from './ReceiptChoiceModal';
 
 interface StayCardProps {
   stay: StayWithDetails;
@@ -64,6 +65,8 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
   const [showSameDayCheckout, setShowSameDayCheckout] = useState(false);
   const [regularCheckoutLastNight, setRegularCheckoutLastNight] = useState<string | null>(null);
   const [roomChangeConfirmation, setRoomChangeConfirmation] = useState(false);
+  const [showReceiptChoice, setShowReceiptChoice] = useState(false);
+  const [receiptChoiceLoading, setReceiptChoiceLoading] = useState(false);
 
   // Use local date noon-to-noon to avoid UTC/timezone drift
   const todayStr = localDateStr(new Date());
@@ -103,8 +106,11 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
       : stay.worker_type === 'staff'
         ? 'Staff'
         : null;
+  // In this first version a particular stay without a payment method means
+  // that payment was deferred at check-in.
+  const hasPendingPayment = !stay.empresa && stay.payment_method === null;
 
-  const handleCheckOut = async () => {
+  const prepareCheckOut = async () => {
     try {
       setLoading(true);
 
@@ -125,6 +131,35 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCheckOut = () => {
+    if (hasPendingPayment) return;
+    if (!stay.empresa) {
+      setShowReceiptChoice(true);
+      return;
+    }
+    void prepareCheckOut();
+  };
+
+  const continueReceiptCheckout = async (request: ReceiptRequest) => {
+    setReceiptChoiceLoading(true);
+    if (request.type !== 'none') {
+      const receiptData = request.type === 'factura'
+        ? { type: request.type, ruc: request.ruc, businessName: request.businessName, fiscalAddress: request.fiscalAddress }
+        : { type: request.type, dni: stay.guests.dni, customerName: stay.guests.name };
+      const marker = `[COMPROBANTE_SOLICITADO] ${JSON.stringify(receiptData)}`;
+      const notesWithoutOldRequest = (stay.notes ?? '').split('\n').filter(line => !line.startsWith('[COMPROBANTE_SOLICITADO]')).join('\n').trim();
+      const { error } = await getClient().from('stays').update({ notes: [notesWithoutOldRequest, marker].filter(Boolean).join('\n') }).eq('id', stay.id);
+      if (error) {
+        window.alert('No se pudo guardar la solicitud del comprobante. Intenta nuevamente.');
+        setReceiptChoiceLoading(false);
+        return;
+      }
+    }
+    setReceiptChoiceLoading(false);
+    setShowReceiptChoice(false);
+    await prepareCheckOut();
   };
 
   const confirmRegularCheckout = async () => {
@@ -293,6 +328,13 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
         {/* DNI on mobile */}
         <p className="text-xs text-gray-400 dark:text-zinc-500 mb-2 sm:hidden">DNI: {stay.guests.dni}</p>
 
+        {hasPendingPayment && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            <Banknote className="h-4 w-4 shrink-0" />
+            Pago pendiente
+          </div>
+        )}
+
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-2 mb-4 text-sm text-gray-600 dark:text-zinc-400">
           <div className="flex items-center gap-2 min-w-0">
@@ -426,12 +468,15 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
             )}
             <button
               onClick={handleCheckOut}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-red-500 text-red-500 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 font-semibold whitespace-nowrap"
+              disabled={loading || hasPendingPayment}
+              title={hasPendingPayment ? 'Completa el pago antes de registrar la salida' : 'Registrar salida'}
+              className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-red-500 text-red-500 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:cursor-not-allowed disabled:opacity-50 font-semibold whitespace-nowrap"
             >
               {loading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <><LogOut className="w-3.5 h-3.5" /> Salida</>
+                : hasPendingPayment
+                  ? <><Clock className="w-3.5 h-3.5" /> Pago pendiente</>
+                  : <><LogOut className="w-3.5 h-3.5" /> Salida</>
               }
             </button>
           </div>
@@ -446,6 +491,15 @@ export function StayCard({ stay, onUpdate, currentUser }: StayCardProps) {
           onRegister={() => void resolveSameDayCheckout(true)}
           onDiscard={() => void resolveSameDayCheckout(false)}
           onCancel={() => setShowSameDayCheckout(false)}
+        />
+      )}
+
+      {showReceiptChoice && (
+        <ReceiptChoiceModal
+          guestName={stay.guests.name}
+          loading={receiptChoiceLoading}
+          onContinue={request => void continueReceiptCheckout(request)}
+          onCancel={() => setShowReceiptChoice(false)}
         />
       )}
 

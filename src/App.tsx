@@ -15,6 +15,8 @@ import { ExportValorizacion } from './components/ExportValorizacion';
 import { TenantMessages } from './components/TenantMessages';
 import { SameDayCheckoutModal } from './components/SameDayCheckoutModal';
 import { CheckoutConfirmationModal } from './components/CheckoutConfirmationModal';
+import { ReceiptChoiceModal, ReceiptRequest } from './components/ReceiptChoiceModal';
+import { BillingModule } from './components/BillingModule';
 import { useTheme } from './context/ThemeContext';
 import {
   AppUser, getSession, logout, validateSession, clearSession,
@@ -49,10 +51,11 @@ import {
   ChevronDown,
   ChevronUp,
   BarChart3,
+  ReceiptText,
   Sparkles,
 } from 'lucide-react';
 
-type Tab = 'dashboard' | 'stays' | 'history' | 'settings' | 'users' | 'config';
+type Tab = 'dashboard' | 'stays' | 'history' | 'billing' | 'settings' | 'users' | 'config';
 
 function localTodayStr(): string {
   const d = new Date();
@@ -119,6 +122,8 @@ function App() {
     lastNightStr: string;
   } | null>(null);
   const [checkoutConfirmationLoading, setCheckoutConfirmationLoading] = useState(false);
+  const [receiptCheckout, setReceiptCheckout] = useState<{ room: Room; stay: StayWithDetails } | null>(null);
+  const [receiptCheckoutLoading, setReceiptCheckoutLoading] = useState(false);
   const tenantId = currentUser?.tenantId ?? null;
   const notificationOptOutKey = currentUser && tenantId
     ? `push_notifications_disabled_${tenantId}_${currentUser.id}`
@@ -326,7 +331,7 @@ useEffect(() => {
     if (localStorage.getItem(notificationKey)) return;
 
     const departureDetails = departuresForNotification.map(stay => notificationLine(
-      `${stay.rooms?.number ?? '—'} · ${stay.guests?.name?.trim() || 'Huésped'} · ${stay.empresa?.trim() || 'Particular'}`
+      `${stay.rooms?.number ?? '—'} · ${stay.guests?.name?.trim() || 'Huésped'} · ${stay.empresa?.trim() || 'Huésped directo'}`
     )).join('\n');
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(
@@ -537,6 +542,18 @@ if (checkSuperuser(currentUser)) {
 
   const handleCheckOut = async (room: Room, stay: StayWithDetails | undefined) => {
     if (!stay) return;
+    if (!stay.empresa && stay.payment_method === null) {
+      window.alert('No se puede registrar la salida hasta completar el pago pendiente.');
+      return;
+    }
+    if (!stay.empresa) {
+      setReceiptCheckout({ room, stay });
+      return;
+    }
+    prepareCheckout(room, stay);
+  };
+
+  const prepareCheckout = (room: Room, stay: StayWithDetails) => {
 
     // Last night slept = today - 1 (local date)
     const now = new Date();
@@ -556,6 +573,32 @@ if (checkSuperuser(currentUser)) {
     }
 
     setCheckoutConfirmation({ room, stay, lastNightStr });
+  };
+
+  const continueReceiptCheckout = async (request: ReceiptRequest) => {
+    if (!receiptCheckout) return;
+    const { room, stay } = receiptCheckout;
+    setReceiptCheckoutLoading(true);
+    if (request.type !== 'none') {
+      const receiptData = request.type === 'factura'
+        ? { type: request.type, ruc: request.ruc, businessName: request.businessName, fiscalAddress: request.fiscalAddress }
+        : { type: request.type, dni: stay.guests.dni, customerName: stay.guests.name };
+      const marker = `[COMPROBANTE_SOLICITADO] ${JSON.stringify(receiptData)}`;
+      const notesWithoutOldRequest = (stay.notes ?? '')
+        .split('\n')
+        .filter(line => !line.startsWith('[COMPROBANTE_SOLICITADO]'))
+        .join('\n')
+        .trim();
+      const { error } = await getClient().from('stays').update({ notes: [notesWithoutOldRequest, marker].filter(Boolean).join('\n') }).eq('id', stay.id);
+      if (error) {
+        window.alert('No se pudo guardar la solicitud del comprobante. Intenta nuevamente.');
+        setReceiptCheckoutLoading(false);
+        return;
+      }
+    }
+    setReceiptCheckoutLoading(false);
+    setReceiptCheckout(null);
+    prepareCheckout(room, stay);
   };
 
   const confirmRegularCheckout = async () => {
@@ -674,6 +717,7 @@ if (checkSuperuser(currentUser)) {
     { tab: 'stays',     label: 'Huespedes',    icon: Users,           visible: canViewStays(currentUser) },
     { tab: 'settings',  label: 'Habitaciones', icon: Building2,       visible: adminView },
     { tab: 'history',   label: 'Reportes', icon: BarChart3, visible: adminView },
+    { tab: 'billing',   label: 'Facturación', icon: ReceiptText, visible: adminView },
     { tab: 'users',     label: 'Usuarios',     icon: UsersRound,      visible: adminView },
     { tab: 'config',    label: 'Configuración', icon: Settings,       visible: adminView },
   ];
@@ -684,6 +728,7 @@ if (checkSuperuser(currentUser)) {
     dashboard: 'Habitaciones',
     stays:     'Huespedes Activos',
     history:   'Reportes',
+    billing:   'Facturación',
     settings:  'Gestion de Habitaciones',
     users:     'Usuarios del Sistema',
     config:    'Configuracion del Hotel',
@@ -692,6 +737,7 @@ if (checkSuperuser(currentUser)) {
     dashboard: 'Estado actual de todas las habitaciones',
     stays:     'Estancias activas',
     history:   'Registro completo de todas las estancias finalizadas',
+    billing:   'Facturas internas y configuración del emisor',
     settings:  'Crear y administrar pisos y habitaciones',
     users:     'Administrar accesos y permisos del sistema',
     config:    'Nombre, logo y datos del establecimiento',
@@ -728,6 +774,14 @@ if (checkSuperuser(currentUser)) {
           loading={checkoutConfirmationLoading}
           onConfirm={() => void confirmRegularCheckout()}
           onCancel={() => setCheckoutConfirmation(null)}
+        />
+      )}
+      {receiptCheckout && (
+        <ReceiptChoiceModal
+          guestName={receiptCheckout.stay.guests.name}
+          loading={receiptCheckoutLoading}
+          onContinue={request => void continueReceiptCheckout(request)}
+          onCancel={() => setReceiptCheckout(null)}
         />
       )}
       {/* Sidebar */}
@@ -1174,6 +1228,10 @@ if (checkSuperuser(currentUser)) {
                 setShowExport(true);
               }}
             />
+          )}
+
+          {activeTab === 'billing' && adminView && (
+            <BillingModule tenantId={tenantId!} sessionToken={currentUser.sessionToken} hotelConfig={hotelConfig} readOnly={demo} />
           )}
 
           {activeTab === 'settings' && adminView && (

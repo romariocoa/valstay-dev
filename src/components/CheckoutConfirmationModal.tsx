@@ -29,7 +29,7 @@ export function CheckoutConfirmationModal({
   onCancel,
 }: CheckoutConfirmationModalProps) {
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div
         role="dialog"
         aria-modal="true"

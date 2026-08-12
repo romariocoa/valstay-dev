@@ -939,7 +939,7 @@ useEffect(() => {
                 : Math.min(6, Math.max(5, width * 0.08)),
             }}
           >
-            {activeStay.empresa || 'Particular'}
+            {activeStay.empresa || 'Huésped directo'}
           </p>
         )}
 
@@ -997,7 +997,9 @@ useEffect(() => {
               e.stopPropagation();
               onCheckOut(room, activeStay);
             }}
-            className="w-full flex items-center justify-center gap-0.5 border border-red-500 text-red-500 rounded font-semibold hover:bg-red-50 transition-colors"
+            disabled={Boolean(activeStay && !activeStay.empresa && activeStay.payment_method === null)}
+            title={activeStay && !activeStay.empresa && activeStay.payment_method === null ? 'Completa el pago antes de registrar la salida' : 'Registrar salida'}
+            className="w-full flex items-center justify-center gap-0.5 border border-red-500 text-red-500 rounded font-semibold hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:border-amber-400 disabled:bg-amber-50 disabled:text-amber-600"
             style={{
               fontSize: expandedPlan
                 ? Math.min(11, width * 0.12)
@@ -1011,7 +1013,7 @@ useEffect(() => {
                 height: expandedPlan ? 11 : 7,
               }}
             />
-            Salida
+            {activeStay && !activeStay.empresa && activeStay.payment_method === null ? 'Pago pendiente' : 'Salida'}
           </button>
         ) : room.status === 'available' ? (
           <button
@@ -2163,7 +2165,7 @@ function RoomDetailCard({ room, stay, onCheckIn, onCheckOut, onClose }: {
           <>
             <p className="font-semibold text-gray-800">{stay.guests.name}</p>
             <p>DNI: {stay.guests.dni}</p>
-            {(stay.empresa || salenHoy) && <p>Empresa: {stay.empresa || 'Particular'}</p>}
+            {(stay.empresa || salenHoy) && <p>Empresa: {stay.empresa || 'Huésped directo'}</p>}
             <p>
               {new Date(stay.check_in_date + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
               {' — '}
@@ -2178,8 +2180,13 @@ function RoomDetailCard({ room, stay, onCheckIn, onCheckOut, onClose }: {
         </button>
       )}
       {(room.status === 'occupied' || !!stay) && stay && (
-        <button onClick={onCheckOut} className="w-full py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700">
-          Salida
+        <button
+          onClick={onCheckOut}
+          disabled={!stay.empresa && stay.payment_method === null}
+          title={!stay.empresa && stay.payment_method === null ? 'Completa el pago antes de registrar la salida' : 'Registrar salida'}
+          className="w-full py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-amber-100 disabled:text-amber-700"
+        >
+          {!stay.empresa && stay.payment_method === null ? 'Pago pendiente' : 'Salida'}
         </button>
       )}
     </div>

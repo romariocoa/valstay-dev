@@ -3,6 +3,7 @@ import { Room, StayWithDetails, getClient } from '../lib/supabase';
 import { RoomCard } from './RoomCard';
 import { ChevronDown, Building2, HardHat, LayoutGrid, Map } from 'lucide-react';
 import { FloorPlan } from './FloorPlan';
+import { useHotelConfig } from '../hooks/useData';
 
 
 function localDateStr(d: Date): string {
@@ -57,6 +58,7 @@ export function Dashboard({
   const [empresaFilter, setEmpresaFilter] = useState<string>('all');
   const [workerTypeFilter, setWorkerTypeFilter] = useState<WorkerTypeFilter>('all');
   const [puchiBlinking, setPuchiBlinking] = useState(false);
+  const { config: hotelConfig } = useHotelConfig(tenantId);
   useEffect(() => {
   let blinkTimeout: number | undefined;
 
@@ -516,6 +518,9 @@ const leavingTodayCount = countableRooms.filter(
                     onCheckIn={() => onCheckIn(room)}
                     onCheckOut={() => onCheckOut(room, stayByRoomId[room.id])}
                     onMarkAvailable={() => handleMarkAvailable(room.id)}
+                    onUpdate={onUpdate}
+                    yapeQrUrl={hotelConfig.yape_qr_url}
+                    plinQrUrl={hotelConfig.plin_qr_url}
                     readOnly={readOnly}
                   />
                 ))}

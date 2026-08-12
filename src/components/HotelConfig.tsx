@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { HotelConfig as HotelConfigType } from '../lib/supabase';
-import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing } from 'lucide-react';
+import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing, Landmark } from 'lucide-react';
 
 interface HotelConfigProps {
   config: HotelConfigType;
@@ -27,7 +27,9 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
   const [plinQrUrl, setPlinQrUrl]             = useState(config.plin_qr_url ?? '');
   const [notificationsEnabled, setNotificationsEnabled] = useState(config.notifications_enabled ?? false);
   const [notificationTime, setNotificationTime] = useState((config.notification_time ?? '07:00').slice(0, 5));
-  const [openSection, setOpenSection] = useState<'hotel' | 'valuation' | 'payments' | 'notifications' | null>(null);
+  const [openSection, setOpenSection] = useState<'hotel' | 'valuation' | 'payments' | 'notifications' | 'sunat' | null>(null);
+  const defaultTaxSettings = { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, pse_provider: '', environment: 'test' as const };
+  const [taxSettings, setTaxSettings] = useState(config.tax_settings ?? defaultTaxSettings);
   const [saving, setSaving]                   = useState(false);
   const [success, setSuccess]                 = useState(false);
   const [error, setError]                     = useState('');
@@ -54,6 +56,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
     setPlinQrUrl(config.plin_qr_url ?? '');
     setNotificationsEnabled(config.notifications_enabled ?? false);
     setNotificationTime((config.notification_time ?? '07:00').slice(0, 5));
+    setTaxSettings(config.tax_settings ?? defaultTaxSettings);
     setLastConfigId(config.updated_at);
   }
 
@@ -162,6 +165,8 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError('El nombre no puede estar vacío.'); return; }
+    if (taxSettings.enabled && (!/^\d{11}$/.test(ruc) || !razonSocial.trim() || !direccion.trim())) { setError('Para activar SUNAT completa el RUC, la razón social y la dirección fiscal.'); setOpenSection('sunat'); return; }
+    if (!/^F[A-Z0-9]{3}$/.test(taxSettings.invoice_series.toUpperCase()) || !/^B[A-Z0-9]{3}$/.test(taxSettings.receipt_series.toUpperCase())) { setError('Usa series válidas, por ejemplo F001 y B001.'); setOpenSection('sunat'); return; }
     setError('');
     setSaving(true);
     setSuccess(false);
@@ -179,6 +184,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
       plin_qr_url: plinQrUrl || null,
       notifications_enabled: notificationsEnabled,
       notification_time: notificationTime,
+      tax_settings: { ...taxSettings, invoice_series: taxSettings.invoice_series.toUpperCase(), receipt_series: taxSettings.receipt_series.toUpperCase() },
     });
     setSaving(false);
     if (err) { setError(err); return; }
@@ -461,6 +467,42 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
           </div>}
         </section>
 
+        {/* ── Facturación electrónica ── */}
+        <section className="order-3 rounded-xl border border-gray-200 dark:border-zinc-700 overflow-hidden">
+          <button type="button" onClick={() => setOpenSection(current => current === 'sunat' ? null : 'sunat')}
+            aria-expanded={openSection === 'sunat'}
+            className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+            <Landmark className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="flex-1">
+              <h3 className="text-base font-bold text-gray-800 dark:text-zinc-100">Facturación electrónica / SUNAT</h3>
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{taxSettings.enabled ? `${taxSettings.environment === 'production' ? 'Producción' : 'Pruebas'} · ${taxSettings.pse_provider || 'PSE por definir'}` : 'Sin activar'}</p>
+            </div>
+            {openSection === 'sunat' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </button>
+          {openSection === 'sunat' && <div className="space-y-4 border-t border-gray-100 px-4 pb-4 pt-4 dark:border-zinc-800">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+              Esta sección prepara ValStay para conectarse a un PSE. Las claves privadas se configurarán como secretos seguros en Supabase y nunca se guardarán aquí.
+            </div>
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800">
+              <span><span className="block text-sm font-bold text-gray-800 dark:text-zinc-100">Activar facturación electrónica</span><span className="text-xs text-gray-500 dark:text-zinc-400">Habilitar al completar la conexión con el PSE</span></span>
+              <input type="checkbox" checked={taxSettings.enabled} onChange={e => setTaxSettings(current => ({ ...current, enabled: e.target.checked }))} className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500" />
+            </label>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div><label className={labelCls}>RUC del emisor *</label><input value={ruc} onChange={e => setRuc(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" placeholder="11 dígitos" className={inputCls} /></div>
+              <div><label className={labelCls}>Razón social *</label><input value={razonSocial} onChange={e => setRazonSocial(e.target.value)} className={inputCls} /></div>
+              <div className="sm:col-span-2"><label className={labelCls}>Dirección fiscal *</label><input value={direccion} onChange={e => setDireccion(e.target.value)} className={inputCls} /></div>
+              <div><label className={labelCls}>Serie de factura</label><input value={taxSettings.invoice_series} onChange={e => setTaxSettings(current => ({ ...current, invoice_series: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }))} placeholder="F001" className={inputCls} /></div>
+              <div><label className={labelCls}>Serie de boleta</label><input value={taxSettings.receipt_series} onChange={e => setTaxSettings(current => ({ ...current, receipt_series: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }))} placeholder="B001" className={inputCls} /></div>
+              <div><label className={labelCls}>IGV (%)</label><input type="number" min="0" max="100" step="0.01" value={taxSettings.igv_rate} onChange={e => setTaxSettings(current => ({ ...current, igv_rate: Number(e.target.value) }))} className={inputCls} /></div>
+              <div><label className={labelCls}>Entorno</label><select value={taxSettings.environment} onChange={e => setTaxSettings(current => ({ ...current, environment: e.target.value as 'test' | 'production' }))} className={inputCls}><option value="test">Pruebas</option><option value="production">Producción</option></select></div>
+              <div className="sm:col-span-2"><label className={labelCls}>Proveedor PSE</label><input value={taxSettings.pse_provider} onChange={e => setTaxSettings(current => ({ ...current, pse_provider: e.target.value }))} placeholder="Ej: proveedor autorizado por SUNAT" className={inputCls} /></div>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-zinc-300"><input type="checkbox" checked={taxSettings.prices_include_igv} onChange={e => setTaxSettings(current => ({ ...current, prices_include_igv: e.target.checked }))} className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />Las tarifas registradas ya incluyen IGV</label>
+            {taxSettings.environment === 'production' && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Producción debe activarse únicamente después de completar y validar las pruebas con el PSE.</p>}
+          </div>}
+        </section>
+
         <section className="order-3 rounded-xl border border-gray-200 dark:border-zinc-700 overflow-hidden">
           <button
             type="button"
@@ -481,7 +523,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
           </button>
 
           {openSection === 'payments' && <div className="px-4 pb-4 border-t border-gray-100 dark:border-zinc-800 pt-4">
-            <p className="text-xs text-gray-400 dark:text-zinc-500 mb-4">Se mostrarán al registrar un huésped particular que pague por Yape o Plin.</p>
+            <p className="text-xs text-gray-400 dark:text-zinc-500 mb-4">Se mostrarán al registrar un huésped directo que pague por Yape o Plin.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {([
               { method: 'yape' as const, label: 'Yape', value: yapeQrUrl, ref: yapeQrRef, clear: () => setYapeQrUrl('') },

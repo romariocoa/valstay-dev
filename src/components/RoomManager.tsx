@@ -329,7 +329,7 @@ function RoomItem({ room, isOccupied, onEdit, onDelete, loading, readOnly = fals
       </div>
 
       {showOccupiedWarning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
@@ -451,7 +451,7 @@ function RoomForm({ rooms, floors, room, onClose, onSave, loading }: RoomFormPro
   const labelBase = 'block text-sm font-medium text-gray-600 dark:text-zinc-400 mb-1';
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="border-b border-gray-100 dark:border-zinc-800 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-800 dark:text-zinc-100">

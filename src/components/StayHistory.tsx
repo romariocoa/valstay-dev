@@ -299,7 +299,7 @@ export function StayHistory({ tenantId, rooms, canDelete = false, canValorizacio
     }`}
   >
     <User className="w-4 h-4" />
-    Particulares
+    Huéspedes directos
 
     <span className="text-xs font-normal bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400 px-1.5 py-0.5 rounded-full">
       {particulares.length}

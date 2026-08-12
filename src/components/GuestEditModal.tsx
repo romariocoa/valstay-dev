@@ -56,7 +56,7 @@ export function GuestEditModal({ guest, onClose, onSave }: GuestEditModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="border-b border-gray-100 dark:border-zinc-800 px-6 py-4 flex justify-between items-center">
           <h2 className="text-lg font-bold text-gray-800 dark:text-zinc-100">Editar Huesped</h2>
