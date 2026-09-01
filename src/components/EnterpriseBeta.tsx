@@ -24,7 +24,7 @@ function diffDays(from:string,to:string):number{if(!/^\d{4}-\d{2}-\d{2}$/.test(f
 function fmtDate(dateStr:string):string{return new Date(dateStr+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'long',year:'numeric'})}
 function waNumber(phone:string):string{const digits=(phone||'').replace(/\D/g,'');return digits.length===9&&digits.startsWith('9')?`51${digits}`:digits}
 function daysInRange(start:string,end:string):Date[]{const days:Date[]=[];const cur=new Date(start+'T12:00:00');const last=new Date(end+'T12:00:00');while(cur<=last){days.push(new Date(cur));cur.setDate(cur.getDate()+1)}return days}
-type ValuationStay={status?:string;check_in_date:string;check_out_date:string|null;baja_start_date:string|null;baja_end_date:string|null;worker_type?:string|null;guest_name?:string|null;guest_dni?:string|null};
+type ValuationStay={status?:string;check_in_date:string;check_out_date:string|null;baja_start_date:string|null;baja_end_date:string|null;worker_type?:string|null;guest_name?:string|null;guest_dni?:string|null;room_number?:string|null};
 function buildValuationRows(stays:ValuationStay[],days:Date[],tarifas:Record<string,number>){
  const lastCompletedNight=new Date();lastCompletedNight.setDate(lastCompletedNight.getDate()-1);lastCompletedNight.setHours(12,0,0,0);
  const guestMap=new Map<string,ValuationStay[]>();
@@ -48,7 +48,7 @@ function buildValuationRows(stays:ValuationStay[],days:Date[],tarifas:Record<str
    return '';
   });
   const cant=dayVals.filter(v=>v==='1').length;
-  return{item:item++,nombre:(first.guest_name||'').toUpperCase(),cargo:cargoLabel[workerType]||workerType.toUpperCase(),dni:first.guest_dni||'',dayVals,cant,tarifa,total:cant*tarifa};
+  return{item:item++,nombre:(first.guest_name||'').toUpperCase(),cargo:cargoLabel[workerType]||workerType.toUpperCase(),dni:first.guest_dni||'',roomNumber:first.room_number||'',dayVals,cant,tarifa,total:cant*tarifa};
  });
 }
 
@@ -65,7 +65,7 @@ export function EnterpriseBeta(){
  const [showAddWorker,setShowAddWorker]=useState(false);
  const [showAssign,setShowAssign]=useState(false);
  const [lastAssignment,setLastAssignment]=useState<{hotelName:string;hotelPhone:string|null;checkIn:string;checkOut:string;days:number;notes:string;workers:Worker[]}|null>(null);
- const [hotelDetail,setHotelDetail]=useState<{tenant_id:string;name:string;contact_phone:string|null;rooms_total:number;rooms_available:number;workers_here:number}|null>(null);
+ const [hotelDetail,setHotelDetail]=useState<{tenant_id:string;name:string;contact_phone:string|null;rooms_total:number;rooms_available:number;workers_here:number;razon_social:string|null;ruc:string|null;direccion:string|null;cuenta_bancaria:string|null;cci:string|null;n_detraccion:string|null;fiscal_email:string|null}|null>(null);
  const [showValuation,setShowValuation]=useState(false);
  const [valuation,setValuation]=useState(()=>{const today=new Date();const lastNight=new Date(today);lastNight.setDate(lastNight.getDate()-1);const pad=(n:number)=>String(n).padStart(2,'0');return{startDate:`${lastNight.getFullYear()}-${pad(lastNight.getMonth()+1)}-01`,endDate:`${lastNight.getFullYear()}-${pad(lastNight.getMonth()+1)}-${pad(lastNight.getDate())}`,obrero:'41.20',empleado:'48',staff:'65.50'}});
  const [valuationBusy,setValuationBusy]=useState(false);
@@ -86,7 +86,7 @@ export function EnterpriseBeta(){
  const login=async(e:FormEvent)=>{e.preventDefault();setBusy(true);const{data:d,error}=await getClient().rpc('login_enterprise_beta',{p_username:auth.username,p_password:auth.password});setBusy(false);if(error||!d?.[0])return setMessage(error?.message||'No se pudo ingresar');const r=d[0],s={token:r.token,organizationName:r.organization_name,displayName:r.display_name};localStorage.setItem(KEY,JSON.stringify(s));if(rememberUser)localStorage.setItem('valstay_empresa_remembered_user',auth.username.toLowerCase().trim());else localStorage.removeItem('valstay_empresa_remembered_user');setSession(s)};
  const addWorker=async(e:FormEvent)=>{e.preventDefault();if(!session)return;setBusy(true);const{error}=await getClient().rpc('enterprise_add_worker',{p_token:session.token,p_dni:worker.dni,p_first_name:worker.first_name,p_paternal_surname:worker.paternal_surname,p_maternal_surname:worker.maternal_surname,p_phone:worker.phone,p_position:worker.position,p_project:worker.project});setBusy(false);if(error)return setMessage(error.message);setWorker({dni:'',first_name:'',paternal_surname:'',maternal_surname:'',phone:'',position:'',project:''});setShowAddWorker(false);await load()};
  const link=async(id:string)=>{if(!session)return;setBusy(true);const{error}=await getClient().rpc('enterprise_request_hotel_link',{p_token:session.token,p_tenant:id});setBusy(false);if(error)setMessage(error.message);else await load()};
- const openHotelDetail=async(h:LinkedHotel)=>{if(!session)return;setBusy(true);const{data:res,error}=await getClient().rpc('enterprise_hotel_overview',{p_token:session.token,p_tenant:h.tenant_id});setBusy(false);if(error)return setMessage(error.message);const o=res as{rooms_total:number;rooms_available:number;workers_here:number};setHotelDetail({tenant_id:h.tenant_id,name:h.name,contact_phone:h.contact_phone,...o})};
+ const openHotelDetail=async(h:LinkedHotel)=>{if(!session)return;setBusy(true);const{data:res,error}=await getClient().rpc('enterprise_hotel_overview',{p_token:session.token,p_tenant:h.tenant_id});setBusy(false);if(error)return setMessage(error.message);const o=res as{rooms_total:number;rooms_available:number;workers_here:number;razon_social:string|null;ruc:string|null;direccion:string|null;cuenta_bancaria:string|null;cci:string|null;n_detraccion:string|null;fiscal_email:string|null};setHotelDetail({tenant_id:h.tenant_id,name:h.name,contact_phone:h.contact_phone,...o})};
  const openValuation=async()=>{if(!session||!hotelDetail)return;setBusy(true);const{data:res,error}=await getClient().rpc('enterprise_hotel_valuation_rates',{p_token:session.token,p_tenant:hotelDetail.tenant_id});setBusy(false);if(error)return setMessage(error.message);const r=res as{obrero_rate:number;empleado_rate:number;staff_rate:number};setValuation(v=>({...v,obrero:String(r.obrero_rate),empleado:String(r.empleado_rate),staff:String(r.staff_rate)}));setShowValuation(true)};
  const prepareValuation=async():Promise<{days:Date[];rows:ReturnType<typeof buildValuationRows>}|null>=>{
   if(!session||!hotelDetail)return null;
@@ -102,14 +102,94 @@ export function EnterpriseBeta(){
   return{days,rows};
  };
  const downloadValuationExcel=async()=>{setValuationBusy(true);const prep=await prepareValuation();setValuationBusy(false);if(!prep||!hotelDetail||!session)return;const{days,rows}=prep;
-  const header=['ITEM','NOMBRE','CARGO','DNI',...days.map(d=>d.getDate()),'CANT','TARIFA','TOTAL'];
-  const body=rows.map(r=>[r.item,r.nombre,r.cargo,r.dni,...r.dayVals,r.cant,r.tarifa,r.total]);
-  const totalGeneral=rows.reduce((sum,r)=>sum+r.total,0);
-  const aoa=[[`VALORIZACIÓN DE PERSONAL — ${hotelDetail.name}`],[`Empresa: ${session.organizationName}`],[`Periodo: ${fmtDate(valuation.startDate)} al ${fmtDate(valuation.endDate)}`],[],header,...body,[],['','','','','','','TOTAL GENERAL',totalGeneral]];
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const MONTHS_ES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const DOW=['D','L','M','X','J','V','S'];
+  const FIXED=6;
+  type CellStyleOpts={bg?:string;bold?:boolean;align?:'left'|'center'|'right';size?:number;color?:string;rotate?:number};
+  const cellStyle=(o:CellStyleOpts={})=>{const s:Record<string,unknown>={font:{bold:!!o.bold,sz:o.size??9,name:'Calibri',color:o.color?{rgb:o.color}:undefined},alignment:{horizontal:o.align??'left',vertical:'center',wrapText:false,textRotation:o.rotate},border:{top:{style:'thin',color:{auto:1}},bottom:{style:'thin',color:{auto:1}},left:{style:'thin',color:{auto:1}},right:{style:'thin',color:{auto:1}}}};if(o.bg)s.fill={patternType:'solid',fgColor:{rgb:o.bg},bgColor:{indexed:64}};return s};
+  const ws:XLSX.WorkSheet={};
+  const set=(r:number,c:number,v:string|number,style?:Record<string,unknown>)=>{const ref=XLSX.utils.encode_cell({r,c});const cell:Record<string,unknown>={t:typeof v==='number'?'n':'s',v};if(style)cell.s=style;ws[ref]=cell as unknown as XLSX.CellObject};
+  const merges:{s:{r:number;c:number};e:{r:number;c:number}}[]=[];
+
+  const providerRows:[string,string][]=[
+   ['DATOS PROVEEDOR:',hotelDetail.razon_social||''],
+   ['NOMBRE COMERCIAL:',hotelDetail.name||''],
+   ['RAZON SOCIAL:',hotelDetail.razon_social||''],
+   ['RUBRO:','HOSPEDAJE'],
+   ['RUC:',hotelDetail.ruc||''],
+   ['DIRECCIÓN:',hotelDetail.direccion||''],
+   ['CONTACTO:',hotelDetail.razon_social||''],
+   ['N° DE TELEFONO:',hotelDetail.contact_phone||''],
+   ['CORREO ELECTRONICO:',hotelDetail.fiscal_email||''],
+   ['CUENTA DE AHORRO:',hotelDetail.cuenta_bancaria||''],
+   ['CUENTA INTERBANCARIA:',hotelDetail.cci||''],
+   ['CUENTA DE DETRACCION:',hotelDetail.n_detraccion||''],
+   ['PERIODO DE VALORIZACIÓN:',`DEL ${fmtDate(valuation.startDate).toUpperCase()} AL ${fmtDate(valuation.endDate).toUpperCase()}`],
+  ];
+  providerRows.forEach(([label,value],i)=>{
+   set(i,0,label,cellStyle({bold:true,size:9}));merges.push({s:{r:i,c:0},e:{r:i,c:1}});
+   set(i,2,value,label==='NOMBRE COMERCIAL:'?cellStyle({bg:'FFFF00',bold:true,size:9}):cellStyle({size:9,color:label==='CORREO ELECTRONICO:'?'0563C1':undefined}));merges.push({s:{r:i,c:2},e:{r:i,c:4}});
+  });
+
+  const monthBandRow=providerRows.length+1,dowRow=monthBandRow+1,headerRow=dowRow+1,dataStartRow=headerRow+1;
+  const bands:{label:string;start:number;end:number}[]=[];
+  {let curKey='',start=FIXED;
+   days.forEach((d,i)=>{const key=`${d.getFullYear()}-${d.getMonth()}`;const col=FIXED+i;if(key!==curKey){if(curKey!=='')bands.push({label:MONTHS_ES[days[i-1].getMonth()],start,end:col-1});curKey=key;start=col}});
+   bands.push({label:MONTHS_ES[days[days.length-1].getMonth()],start,end:FIXED+days.length-1});
+  }
+  bands.forEach((b,i)=>{const color=i%2===0?'808000':'FFFF00';set(monthBandRow,b.start,b.label,cellStyle({bg:color,bold:true,align:'center',size:9,color:'FFFFFF'}));if(b.end>b.start)merges.push({s:{r:monthBandRow,c:b.start},e:{r:monthBandRow,c:b.end}})});
+
+  const fixedHeaders=['ITEM','DNI','APELLIDOS Y NOMBRES','CARGO','Nº HAB','HABITACION'];
+  fixedHeaders.forEach((h,c)=>set(headerRow,c,h,cellStyle({bg:'0070C0',bold:true,align:'center',size:8,color:'FFFFFF'})));
+  const tailStart=FIXED+days.length;
+  ['TOTAL DE DÍAS','PRECIO UNITARIO SIN IGV S/','TOTAL S/.'].forEach((h,i)=>set(headerRow,tailStart+i,h,cellStyle({bg:'0070C0',bold:true,align:'center',size:8,color:'FFFFFF'})));
+  days.forEach((d,i)=>{
+   const col=FIXED+i,isSunday=d.getDay()===0;
+   set(dowRow,col,DOW[d.getDay()],cellStyle({bg:isSunday?'FFFF00':'D9D9D9',bold:true,align:'center',size:8}));
+   const dateLabel=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+   set(headerRow,col,dateLabel,cellStyle({bg:isSunday?'FFFF00':'0070C0',bold:true,align:'center',size:7,color:isSunday?'000000':'FFFFFF',rotate:90}));
+  });
+
+  rows.forEach((row,ri)=>{
+   const r=dataStartRow+ri;
+   set(r,0,row.item,cellStyle({align:'center',size:8}));
+   set(r,1,row.dni,cellStyle({align:'center',size:8}));
+   set(r,2,row.nombre,cellStyle({align:'left',size:8}));
+   set(r,3,row.cargo,cellStyle({align:'left',size:8}));
+   set(r,4,row.roomNumber,cellStyle({align:'center',size:8}));
+   set(r,5,row.roomNumber,cellStyle({align:'center',size:8}));
+   row.dayVals.forEach((v,ci)=>set(r,FIXED+ci,v==='1'?1:'',cellStyle({align:'center',size:8})));
+   set(r,tailStart,row.cant,cellStyle({align:'center',bold:true,size:8}));
+   set(r,tailStart+1,row.tarifa,cellStyle({align:'center',size:8}));
+   set(r,tailStart+2,row.total,cellStyle({align:'right',bold:true,size:8}));
+  });
+
+  const totalsRow=dataStartRow+rows.length;
+  const dayTotals=days.map((_,ci)=>rows.reduce((acc,r)=>acc+(r.dayVals[ci]==='1'?1:0),0));
+  dayTotals.forEach((v,ci)=>set(totalsRow,FIXED+ci,v,cellStyle({bg:'00B0F0',bold:true,align:'center',size:8})));
+  const totalDiasGrand=rows.reduce((a,r)=>a+r.cant,0);
+  const grandTotal=rows.reduce((a,r)=>a+r.total,0);
+  set(totalsRow,tailStart,'TOTAL A FACTURAR',cellStyle({bg:'92D050',bold:true,align:'center',size:8}));
+  merges.push({s:{r:totalsRow,c:tailStart},e:{r:totalsRow,c:tailStart+1}});
+  set(totalsRow,tailStart+2,`S/. ${grandTotal.toFixed(2)}`,cellStyle({bg:'92D050',bold:true,align:'right',size:9}));
+  const grandDaysRow=totalsRow+1;
+  set(grandDaysRow,FIXED,totalDiasGrand,cellStyle({bg:'92D050',bold:true,align:'center',size:9}));
+
+  const igv=grandTotal*0.18,finalTotal=grandTotal+igv;
+  const boxRow=grandDaysRow+2;
+  ([['SUBTOTAL',grandTotal],['IGV 18%',igv],['TOTAL',finalTotal]] as [string,number][]).forEach(([label,val],i)=>{
+   set(boxRow+i,tailStart,label,cellStyle({bg:'D9D9D9',bold:true,align:'left',size:9}));
+   merges.push({s:{r:boxRow+i,c:tailStart},e:{r:boxRow+i,c:tailStart+1}});
+   set(boxRow+i,tailStart+2,`S/. ${val.toFixed(2)}`,cellStyle({bg:'D9D9D9',bold:true,align:'right',size:9}));
+  });
+
+  ws['!merges']=merges;
+  ws['!cols']=[{wch:6},{wch:11},{wch:26},{wch:11},{wch:8},{wch:10},...days.map(()=>({wch:4})),{wch:9},{wch:12},{wch:12}];
+  const rowInfos:XLSX.RowInfo[]=[];rowInfos[headerRow]={hpt:60};ws['!rows']=rowInfos;
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:boxRow+2,c:tailStart+2}});
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Valorización');
-  XLSX.writeFile(wb,`valorizacion_${hotelDetail.name.replace(/[^a-z0-9]+/gi,'_')}_${valuation.startDate}_al_${valuation.endDate}.xlsx`);
+  XLSX.writeFile(wb,`valorizacion_${hotelDetail.name.replace(/[^a-z0-9]+/gi,'_')}_${valuation.startDate}_al_${valuation.endDate}.xlsx`,{cellStyles:true});
  };
  const downloadValuationPdf=async()=>{setValuationBusy(true);const prep=await prepareValuation();setValuationBusy(false);if(!prep||!hotelDetail||!session)return;const{days,rows}=prep;
   const{jsPDF}=await import('jspdf');
