@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+.mcp.json
 .DS_Store
 .vercel
 supabase/.temp/
+padron_reducido_ruc.zip
