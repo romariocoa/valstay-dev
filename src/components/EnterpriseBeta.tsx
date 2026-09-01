@@ -13,11 +13,12 @@ const KEY='valstay_empresa_beta_session';
 const field='w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-amber-500';
 const iosOverlay='fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center';
 const iosSheet='max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-3xl sm:pb-6';
-const iosRow='flex items-center gap-3 px-4 py-3';
-const iosLabel='w-32 shrink-0 text-[15px] text-slate-500';
-const iosInput='w-full bg-transparent text-[15px] text-slate-900 outline-none placeholder:text-slate-300';
-const iosGroup='mx-4 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white';
+const iosGroup='mx-4 grid gap-2.5';
+const iosField='w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[15px] text-slate-900 outline-none focus:border-amber-500 placeholder:text-slate-300';
+const iosFieldLabel='mb-1 block text-xs font-semibold text-slate-500';
 const iosPill='mx-4 mt-5 flex items-center justify-center gap-2 rounded-full bg-amber-500 py-3.5 text-[15px] font-bold text-slate-900 active:bg-amber-600 disabled:opacity-40';
+const iosDetailGroup='mx-4 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white';
+const iosDetailRow='flex items-center gap-3 px-4 py-3';
 function addDays(dateStr:string,days:number):string{if(!/^\d{4}-\d{2}-\d{2}$/.test(dateStr))return'';const d=new Date(dateStr+'T12:00:00');d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
 function diffDays(from:string,to:string):number{if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to))return 0;return Math.max(0,Math.round((new Date(to+'T12:00:00').getTime()-new Date(from+'T12:00:00').getTime())/86400000))}
 function fmtDate(dateStr:string):string{return new Date(dateStr+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'long',year:'numeric'})}
@@ -87,17 +88,20 @@ export function EnterpriseBeta(){
  const link=async(id:string)=>{if(!session)return;setBusy(true);const{error}=await getClient().rpc('enterprise_request_hotel_link',{p_token:session.token,p_tenant:id});setBusy(false);if(error)setMessage(error.message);else await load()};
  const openHotelDetail=async(h:LinkedHotel)=>{if(!session)return;setBusy(true);const{data:res,error}=await getClient().rpc('enterprise_hotel_overview',{p_token:session.token,p_tenant:h.tenant_id});setBusy(false);if(error)return setMessage(error.message);const o=res as{rooms_total:number;rooms_available:number;workers_here:number};setHotelDetail({tenant_id:h.tenant_id,name:h.name,contact_phone:h.contact_phone,...o})};
  const openValuation=async()=>{if(!session||!hotelDetail)return;setBusy(true);const{data:res,error}=await getClient().rpc('enterprise_hotel_valuation_rates',{p_token:session.token,p_tenant:hotelDetail.tenant_id});setBusy(false);if(error)return setMessage(error.message);const r=res as{obrero_rate:number;empleado_rate:number;staff_rate:number};setValuation(v=>({...v,obrero:String(r.obrero_rate),empleado:String(r.empleado_rate),staff:String(r.staff_rate)}));setShowValuation(true)};
- const generateValuation=async()=>{if(!session||!hotelDetail)return;if(!valuation.startDate||!valuation.endDate||valuation.endDate<valuation.startDate){setMessage('Selecciona un rango de fechas válido.');return}
-  setValuationBusy(true);
+ const prepareValuation=async():Promise<{days:Date[];rows:ReturnType<typeof buildValuationRows>}|null>=>{
+  if(!session||!hotelDetail)return null;
+  if(!valuation.startDate||!valuation.endDate||valuation.endDate<valuation.startDate){setMessage('Selecciona un rango de fechas válido.');return null}
   const[{data:stays,error:staysErr}]=await Promise.all([
    getClient().rpc('enterprise_hotel_stays',{p_token:session.token,p_tenant:hotelDetail.tenant_id,p_start_date:valuation.startDate,p_end_date:valuation.endDate}),
    getClient().rpc('enterprise_save_hotel_valuation_rates',{p_token:session.token,p_tenant:hotelDetail.tenant_id,p_obrero:Number(valuation.obrero)||0,p_empleado:Number(valuation.empleado)||0,p_staff:Number(valuation.staff)||0}),
   ]);
-  setValuationBusy(false);
-  if(staysErr)return setMessage(staysErr.message);
+  if(staysErr){setMessage(staysErr.message);return null}
   const days=daysInRange(valuation.startDate,valuation.endDate);
   const tarifas={obrero:Number(valuation.obrero)||0,empleado:Number(valuation.empleado)||0,staff:Number(valuation.staff)||0};
   const rows=buildValuationRows((stays as ValuationStay[])||[],days,tarifas);
+  return{days,rows};
+ };
+ const downloadValuationExcel=async()=>{setValuationBusy(true);const prep=await prepareValuation();setValuationBusy(false);if(!prep||!hotelDetail||!session)return;const{days,rows}=prep;
   const header=['ITEM','NOMBRE','CARGO','DNI',...days.map(d=>d.getDate()),'CANT','TARIFA','TOTAL'];
   const body=rows.map(r=>[r.item,r.nombre,r.cargo,r.dni,...r.dayVals,r.cant,r.tarifa,r.total]);
   const totalGeneral=rows.reduce((sum,r)=>sum+r.total,0);
@@ -106,6 +110,34 @@ export function EnterpriseBeta(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Valorización');
   XLSX.writeFile(wb,`valorizacion_${hotelDetail.name.replace(/[^a-z0-9]+/gi,'_')}_${valuation.startDate}_al_${valuation.endDate}.xlsx`);
+ };
+ const downloadValuationPdf=async()=>{setValuationBusy(true);const prep=await prepareValuation();setValuationBusy(false);if(!prep||!hotelDetail||!session)return;const{days,rows}=prep;
+  const{jsPDF}=await import('jspdf');
+  const{default:autoTable}=await import('jspdf-autotable');
+  const grandTotal=rows.reduce((a,r)=>a+r.total,0);
+  const totalCant=rows.reduce((a,r)=>a+r.cant,0);
+  const doc=new jsPDF({orientation:'landscape',format:'a4',unit:'mm'});
+  const pageW=doc.internal.pageSize.getWidth();
+  const margin=12;let y=margin;
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(hotelDetail.name.toUpperCase(),pageW/2,y+5,{align:'center'});
+  doc.setFontSize(11);doc.setTextColor(60,60,60);doc.text('VALORIZACIÓN DE PERSONAL',pageW/2,y+12,{align:'center'});doc.setTextColor(0,0,0);
+  y+=20;
+  doc.setFillColor(184,204,228);doc.roundedRect(margin,y-1,pageW-margin*2,8,1,1,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8.5);
+  doc.text(`EMPRESA: ${session.organizationName}   |   DEL ${fmtDate(valuation.startDate).toUpperCase()} AL ${fmtDate(valuation.endDate).toUpperCase()}`,pageW/2,y+4.5,{align:'center'});
+  y+=12;
+  const usable=pageW-margin*2;
+  const W_NUM=6,W_NAME=45,W_CARGO=18,W_DNI=16,W_CANT=8,W_TAR=14,W_TOT=18;
+  const fixedW=W_NUM+W_NAME+W_CARGO+W_DNI,tailW=W_CANT+W_TAR+W_TOT;
+  const dayW=Math.max(5,(usable-fixedW-tailW)/days.length);
+  const head=[['N°','NOMBRES Y APELLIDOS','CARGO','DNI',...days.map(d=>`${d.getDate()}`),'CANT','TARIFA','TOTAL']];
+  const dayTotals=days.map((_,i)=>rows.reduce((acc,r)=>acc+(r.dayVals[i]==='1'?1:0),0));
+  const body=[...rows.map(r=>[`${r.item}`,r.nombre,r.cargo,r.dni,...r.dayVals,`${r.cant}`,`S/ ${r.tarifa.toFixed(2)}`,`S/ ${r.total.toFixed(2)}`]),['','TOTAL','','',...dayTotals.map(s=>s>0?`${s}`:''),`${totalCant}`,'',`S/ ${grandTotal.toFixed(2)}`]];
+  const totalsRowIdx=body.length-1;
+  autoTable(doc,{startY:y,head,body,margin:{left:margin,right:margin},theme:'grid',styles:{fontSize:6,cellPadding:{top:1.2,bottom:1.2,left:0.8,right:0.8},valign:'middle',overflow:'ellipsize'},headStyles:{fillColor:[184,204,228],textColor:[0,0,0],fontStyle:'bold',halign:'center',fontSize:6},columnStyles:{0:{halign:'center',cellWidth:W_NUM},1:{halign:'left',cellWidth:W_NAME},2:{halign:'center',cellWidth:W_CARGO,fontSize:5.5,overflow:'visible'},3:{halign:'center',cellWidth:W_DNI},...Object.fromEntries(days.map((_,i)=>[4+i,{halign:'center',cellWidth:dayW,cellPadding:{top:1.2,bottom:1.2,left:0.3,right:0.3}}])),[4+days.length]:{halign:'center',cellWidth:W_CANT},[4+days.length+1]:{halign:'right',cellWidth:W_TAR},[4+days.length+2]:{halign:'right',cellWidth:W_TOT}},didParseCell:(data)=>{if(data.section==='body'){const isDayCol=data.column.index>=4&&data.column.index<4+days.length;if(data.row.index===totalsRowIdx){data.cell.styles.fillColor=[217,217,217];data.cell.styles.fontStyle='bold';data.cell.styles.halign=isDayCol?'center':data.column.index<=1?'center':'right'}else if(isDayCol&&data.cell.raw==='1'){data.cell.styles.fillColor=[146,208,80];data.cell.styles.fontStyle='bold'}}}});
+  const totalPages=doc.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){doc.setPage(p);const pageH=doc.internal.pageSize.getHeight();doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(120,120,120);doc.text(`Generado por ValStay Empresa · ${session.organizationName}`,pageW-margin,pageH-5.5,{align:'right'})}
+  doc.save(`valorizacion_${hotelDetail.name.replace(/[^a-z0-9]+/gi,'_')}_${valuation.startDate}_al_${valuation.endDate}.pdf`);
  };
  const send=async(e:FormEvent)=>{e.preventDefault();if(!session)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(trip.checkIn)||!/^\d{4}-\d{2}-\d{2}$/.test(trip.checkOut)||trip.checkOut<=trip.checkIn)return setMessage('Selecciona fechas válidas; la salida debe ser posterior al ingreso.');setBusy(true);const{error}=await getClient().rpc('enterprise_send_assignment',{p_token:session.token,p_tenant:trip.hotel,p_worker_ids:selected,p_check_in:trip.checkIn,p_check_out:trip.checkOut,p_notes:trip.notes});setBusy(false);if(error)return setMessage(error.message);const hotel=data?.hotels.find(h=>h.tenant_id===trip.hotel);setLastAssignment({hotelName:hotel?.name||'',hotelPhone:hotel?.contact_phone||null,checkIn:trip.checkIn,checkOut:trip.checkOut,days:trip.days,notes:trip.notes,workers:allWorkers.filter(w=>selected.includes(w.id))});setSelected([]);setTrip({hotel:'',checkIn:'',checkOut:'',days:14,notes:''});setShowAssign(false);setMessage('Trabajadores enviados como reservaciones.');await load()};
  const workerHotel=(w:Worker):{hotel:string;status?:string}=>{const list=data?.assignments||[];for(let i=list.length-1;i>=0;i--){const entry=list[i].workers?.find(x=>x.dni===w.dni);if(entry&&entry.status==='reviewed')return{hotel:list[i].hotel,status:entry.status}}return{hotel:'Por asignarse'}};
@@ -148,16 +180,16 @@ export function EnterpriseBeta(){
   <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-300 sm:hidden"/>
   <div className="flex items-start justify-between px-5 pt-4"><div><h3 className="text-xl font-bold text-slate-900">Agregar trabajador</h3><p className="mt-0.5 text-sm text-slate-400">Se agrega a la lista de Trabajadores</p></div><button type="button" onClick={()=>setShowAddWorker(false)} className="rounded-full bg-slate-100 p-1.5 text-slate-500"><X className="h-4 w-4"/></button></div>
   <form onSubmit={addWorker} className="mt-4 space-y-4 pb-2">
-    <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Identificación</p><div className={iosGroup}><label className={iosRow}><span className={iosLabel}>DNI</span><input required autoFocus inputMode="numeric" className={iosInput} placeholder="12345678" value={worker.dni} onChange={e=>setWorker({...worker,dni:e.target.value.replace(/\D/g,'')})}/></label></div></div>
+    <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Identificación</p><div className={iosGroup}><div><label className={iosFieldLabel}>DNI</label><input required autoFocus inputMode="numeric" className={iosField} placeholder="12345678" value={worker.dni} onChange={e=>setWorker({...worker,dni:e.target.value.replace(/\D/g,'')})}/></div></div></div>
     <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Nombre completo</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Nombres</span><input required className={iosInput} placeholder="Carlos" value={worker.first_name} onChange={e=>setWorker({...worker,first_name:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Ap. paterno</span><input className={iosInput} placeholder="Quispe" value={worker.paternal_surname} onChange={e=>setWorker({...worker,paternal_surname:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Ap. materno</span><input className={iosInput} placeholder="Mamani" value={worker.maternal_surname} onChange={e=>setWorker({...worker,maternal_surname:e.target.value})}/></label>
+      <div><label className={iosFieldLabel}>Nombres</label><input required className={iosField} placeholder="Carlos" value={worker.first_name} onChange={e=>setWorker({...worker,first_name:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Ap. paterno</label><input className={iosField} placeholder="Quispe" value={worker.paternal_surname} onChange={e=>setWorker({...worker,paternal_surname:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Ap. materno</label><input className={iosField} placeholder="Mamani" value={worker.maternal_surname} onChange={e=>setWorker({...worker,maternal_surname:e.target.value})}/></div>
     </div></div>
     <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Contacto y asignación</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Teléfono</span><input className={iosInput} placeholder="987 654 321" value={worker.phone} onChange={e=>setWorker({...worker,phone:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Cargo</span><input className={iosInput} placeholder="Obrero" value={worker.position} onChange={e=>setWorker({...worker,position:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Proyecto</span><input className={iosInput} placeholder="Torre Central" value={worker.project} onChange={e=>setWorker({...worker,project:e.target.value})}/></label>
+      <div><label className={iosFieldLabel}>Teléfono</label><input className={iosField} placeholder="987 654 321" value={worker.phone} onChange={e=>setWorker({...worker,phone:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Cargo</label><input className={iosField} placeholder="Obrero" value={worker.position} onChange={e=>setWorker({...worker,position:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Proyecto</label><input className={iosField} placeholder="Torre Central" value={worker.project} onChange={e=>setWorker({...worker,project:e.target.value})}/></div>
     </div></div>
     <button disabled={busy} className={iosPill}><Plus className="h-4 w-4"/>{busy?'Agregando...':'Agregar trabajador'}</button>
   </form>
@@ -175,10 +207,10 @@ export function EnterpriseBeta(){
  {hotelDetail&&!showValuation&&<div className={iosOverlay}><div className={iosSheet}>
   <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-300 sm:hidden"/>
   <div className="flex items-start justify-between px-5 pt-4"><div><h3 className="text-xl font-bold text-slate-900">{hotelDetail.name}</h3><p className="mt-0.5 text-sm text-slate-400">Detalle del hospedaje</p></div><button type="button" onClick={()=>setHotelDetail(null)} className="rounded-full bg-slate-100 p-1.5 text-slate-500"><X className="h-4 w-4"/></button></div>
-  <div className="mt-4 px-4"><div className={iosGroup}>
-    <div className={iosRow}><Phone className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Teléfono</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.contact_phone||'No registrado'}</span></div>
-    <div className={iosRow}><BedDouble className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Habitaciones disponibles</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.rooms_available} / {hotelDetail.rooms_total}</span></div>
-    <div className={iosRow}><Users className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Trabajadores ahí</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.workers_here}</span></div>
+  <div className="mt-4 px-4"><div className={iosDetailGroup}>
+    <div className={iosDetailRow}><Phone className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Teléfono</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.contact_phone||'No registrado'}</span></div>
+    <div className={iosDetailRow}><BedDouble className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Habitaciones disponibles</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.rooms_available} / {hotelDetail.rooms_total}</span></div>
+    <div className={iosDetailRow}><Users className="h-4 w-4 shrink-0 text-slate-400"/><span className="flex-1 text-[15px] text-slate-500">Trabajadores ahí</span><span className="text-[15px] font-semibold text-slate-900">{hotelDetail.workers_here}</span></div>
   </div></div>
   <button type="button" disabled={busy} onClick={()=>void openValuation()} className={iosPill}><FileSpreadsheet className="h-4 w-4"/>Generar valorización</button>
  </div></div>}
@@ -186,32 +218,33 @@ export function EnterpriseBeta(){
   <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-300 sm:hidden"/>
   <div className="flex items-start justify-between px-5 pt-4"><div><h3 className="text-xl font-bold text-slate-900">Generar valorización</h3><p className="mt-0.5 text-sm text-slate-400">{hotelDetail.name} · solo tus trabajadores</p></div><button type="button" onClick={()=>setShowValuation(false)} className="rounded-full bg-slate-100 p-1.5 text-slate-500"><X className="h-4 w-4"/></button></div>
   <div className="mt-4 space-y-4 px-4 pb-2">
-    <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Periodo</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Desde</span><input type="date" className={iosInput} value={valuation.startDate} onChange={e=>setValuation({...valuation,startDate:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Hasta</span><input type="date" className={iosInput} value={valuation.endDate} onChange={e=>setValuation({...valuation,endDate:e.target.value})}/></label>
+    <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Periodo</p><div className={`${iosGroup} grid-cols-2`}>
+      <div><label className={iosFieldLabel}>Desde</label><input type="date" className={iosField} value={valuation.startDate} onChange={e=>setValuation({...valuation,startDate:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Hasta</label><input type="date" className={iosField} value={valuation.endDate} onChange={e=>setValuation({...valuation,endDate:e.target.value})}/></div>
     </div></div>
-    <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Tarifas por día (S/)</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Obrero</span><input type="number" step="0.01" className={iosInput} value={valuation.obrero} onChange={e=>setValuation({...valuation,obrero:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Empleado</span><input type="number" step="0.01" className={iosInput} value={valuation.empleado} onChange={e=>setValuation({...valuation,empleado:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Staff</span><input type="number" step="0.01" className={iosInput} value={valuation.staff} onChange={e=>setValuation({...valuation,staff:e.target.value})}/></label>
+    <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Tarifas por día (S/)</p><div className={`${iosGroup} grid-cols-3`}>
+      <div><label className={iosFieldLabel}>Obrero</label><input type="number" step="0.01" className={iosField} value={valuation.obrero} onChange={e=>setValuation({...valuation,obrero:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Empleado</label><input type="number" step="0.01" className={iosField} value={valuation.empleado} onChange={e=>setValuation({...valuation,empleado:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Staff</label><input type="number" step="0.01" className={iosField} value={valuation.staff} onChange={e=>setValuation({...valuation,staff:e.target.value})}/></div>
     </div></div>
-    <button type="button" disabled={valuationBusy} onClick={()=>void generateValuation()} className={iosPill}><Download className="h-4 w-4"/>{valuationBusy?'Generando...':'Descargar Excel'}</button>
+    <div className="mx-4 mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={valuationBusy} onClick={()=>void downloadValuationExcel()} className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 py-3.5 text-[15px] font-bold text-white active:bg-emerald-700 disabled:opacity-40"><Download className="h-4 w-4"/>Excel</button><button type="button" disabled={valuationBusy} onClick={()=>void downloadValuationPdf()} className="flex items-center justify-center gap-2 rounded-full bg-red-600 py-3.5 text-[15px] font-bold text-white active:bg-red-700 disabled:opacity-40"><FileSpreadsheet className="h-4 w-4"/>PDF</button></div>
+    {valuationBusy&&<p className="mt-2 text-center text-xs text-slate-400">Generando...</p>}
   </div>
  </div></div>}
  {editWorker&&<div className={iosOverlay}><div className={iosSheet}>
   <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-300 sm:hidden"/>
   <div className="flex items-start justify-between px-5 pt-4"><div><h3 className="text-xl font-bold text-slate-900">Editar trabajador</h3><p className="mt-0.5 text-sm text-slate-400">{editWorker.name}</p></div><button type="button" onClick={()=>setEditWorker(null)} className="rounded-full bg-slate-100 p-1.5 text-slate-500"><X className="h-4 w-4"/></button></div>
   <form onSubmit={saveEditWorker} className="mt-4 space-y-4 pb-2">
-    <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Identificación</p><div className={iosGroup}><label className={iosRow}><span className={iosLabel}>DNI</span><input required autoFocus inputMode="numeric" className={iosInput} value={editWorker.dni} onChange={e=>setEditWorker({...editWorker,dni:e.target.value.replace(/\D/g,'')})}/></label></div></div>
+    <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Identificación</p><div className={iosGroup}><div><label className={iosFieldLabel}>DNI</label><input required autoFocus inputMode="numeric" className={iosField} value={editWorker.dni} onChange={e=>setEditWorker({...editWorker,dni:e.target.value.replace(/\D/g,'')})}/></div></div></div>
     <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Nombre completo</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Nombres</span><input required className={iosInput} value={editWorker.first_name} onChange={e=>setEditWorker({...editWorker,first_name:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Ap. paterno</span><input className={iosInput} value={editWorker.paternal_surname} onChange={e=>setEditWorker({...editWorker,paternal_surname:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Ap. materno</span><input className={iosInput} value={editWorker.maternal_surname} onChange={e=>setEditWorker({...editWorker,maternal_surname:e.target.value})}/></label>
+      <div><label className={iosFieldLabel}>Nombres</label><input required className={iosField} value={editWorker.first_name} onChange={e=>setEditWorker({...editWorker,first_name:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Ap. paterno</label><input className={iosField} value={editWorker.paternal_surname} onChange={e=>setEditWorker({...editWorker,paternal_surname:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Ap. materno</label><input className={iosField} value={editWorker.maternal_surname} onChange={e=>setEditWorker({...editWorker,maternal_surname:e.target.value})}/></div>
     </div></div>
     <div><p className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Contacto y asignación</p><div className={iosGroup}>
-      <label className={iosRow}><span className={iosLabel}>Teléfono</span><input className={iosInput} value={editWorker.phone} onChange={e=>setEditWorker({...editWorker,phone:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Cargo</span><input className={iosInput} value={editWorker.position} onChange={e=>setEditWorker({...editWorker,position:e.target.value})}/></label>
-      <label className={iosRow}><span className={iosLabel}>Proyecto</span><input className={iosInput} value={editWorker.project} onChange={e=>setEditWorker({...editWorker,project:e.target.value})}/></label>
+      <div><label className={iosFieldLabel}>Teléfono</label><input className={iosField} value={editWorker.phone} onChange={e=>setEditWorker({...editWorker,phone:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Cargo</label><input className={iosField} value={editWorker.position} onChange={e=>setEditWorker({...editWorker,position:e.target.value})}/></div>
+      <div><label className={iosFieldLabel}>Proyecto</label><input className={iosField} value={editWorker.project} onChange={e=>setEditWorker({...editWorker,project:e.target.value})}/></div>
     </div></div>
     <button disabled={busy} className={iosPill}><Pencil className="h-4 w-4"/>{busy?'Guardando...':'Guardar cambios'}</button>
   </form>
