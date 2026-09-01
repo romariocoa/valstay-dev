@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import QRCode from 'qrcode';
 import { getClient, HotelConfig as HotelConfigType } from '../lib/supabase';
-import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing, Landmark, KeyRound, ShieldCheck, RefreshCw, Copy, ExternalLink, Download, Link2, LockKeyhole } from 'lucide-react';
+import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing, Landmark, KeyRound, ShieldCheck, RefreshCw, Copy, ExternalLink, Download, Link2, LockKeyhole, Building2 } from 'lucide-react';
 
 interface HotelConfigProps {
   config: HotelConfigType;
@@ -35,7 +35,25 @@ export function HotelConfig({ config, sessionToken, billingEnabled = false, onSa
   const [plinQrUrl, setPlinQrUrl]             = useState(config.plin_qr_url ?? '');
   const [notificationsEnabled, setNotificationsEnabled] = useState(config.notifications_enabled ?? false);
   const [notificationTime, setNotificationTime] = useState((config.notification_time ?? '07:00').slice(0, 5));
-  const [openSection, setOpenSection] = useState<'hotel' | 'valuation' | 'payments' | 'notifications' | 'sunat' | null>(null);
+  const [openSection, setOpenSection] = useState<'hotel' | 'valuation' | 'payments' | 'notifications' | 'sunat' | 'enterprise' | null>(null);
+  type EnterpriseLink = { link_id: string; organization_name: string; ruc: string; status: string; workers_count: number };
+  const [enterpriseLinks, setEnterpriseLinks] = useState<EnterpriseLink[]>([]);
+  const [loadingEnterpriseLinks, setLoadingEnterpriseLinks] = useState(false);
+  const [togglingLinkId, setTogglingLinkId] = useState<string | null>(null);
+  const loadEnterpriseLinks = useCallback(async () => {
+    setLoadingEnterpriseLinks(true);
+    const { data } = await getClient().rpc('list_enterprise_hotel_links', { p_session_token: sessionToken });
+    setEnterpriseLinks((data as EnterpriseLink[]) ?? []);
+    setLoadingEnterpriseLinks(false);
+  }, [sessionToken]);
+  useEffect(() => { void loadEnterpriseLinks(); }, [loadEnterpriseLinks]);
+  const toggleEnterpriseLink = async (linkId: string, active: boolean) => {
+    setTogglingLinkId(linkId);
+    const { error: toggleError } = await getClient().rpc('toggle_enterprise_hotel_link', { p_session_token: sessionToken, p_link_id: linkId, p_active: active });
+    setTogglingLinkId(null);
+    if (toggleError) { setError(toggleError.message); return; }
+    await loadEnterpriseLinks();
+  };
   const defaultTaxSettings = { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, ubigeo: '', department: '', province: '', district: '', fiscal_email: '', fiscal_phone: '', environment: 'test' as const };
   const [taxSettings, setTaxSettings] = useState({ ...defaultTaxSettings, ...(config.tax_settings ?? {}) });
   const [saving, setSaving]                   = useState(false);
@@ -439,6 +457,52 @@ export function HotelConfig({ config, sessionToken, billingEnabled = false, onSa
               Desactivar avisos para todos
             </button>
           </div>
+        </div>}
+      </section>
+
+      <section className="order-5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 overflow-hidden">
+        <button type="button" onClick={() => setOpenSection(current => current === 'enterprise' ? null : 'enterprise')}
+          aria-expanded={openSection === 'enterprise'}
+          className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+          <Building2 className="w-5 h-5 text-gray-600 dark:text-zinc-400 shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-gray-800 dark:text-zinc-100">Sincronización con empresas</h3>
+            <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">
+              {enterpriseLinks.filter(l => l.status === 'accepted').length > 0
+                ? `Sincronizado con ${enterpriseLinks.filter(l => l.status === 'accepted').length} empresa(s)`
+                : 'Sin empresas sincronizadas'}
+            </p>
+          </div>
+          {openSection === 'enterprise' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+        </button>
+
+        {openSection === 'enterprise' && <div className="px-4 py-4 border-t border-gray-100 dark:border-zinc-800 space-y-3">
+          {loadingEnterpriseLinks && <p className="text-sm text-gray-400 dark:text-zinc-500">Cargando…</p>}
+          {!loadingEnterpriseLinks && enterpriseLinks.length === 0 && <p className="text-sm text-gray-400 dark:text-zinc-500">Ninguna empresa ha solicitado sincronizarse todavía. Las solicitudes aparecen en tus notificaciones.</p>}
+          {enterpriseLinks.map(link => {
+            const isOn = link.status === 'accepted';
+            const isPending = link.status === 'pending';
+            const isRejected = link.status === 'rejected';
+            return <div key={link.link_id} className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-3 py-3 dark:border-zinc-700">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-700 dark:text-zinc-200">{link.organization_name}</p>
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-zinc-500">RUC {link.ruc} · {link.workers_count} trabajador(es)</p>
+              </div>
+              {isPending && <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">Pendiente</span>}
+              {isRejected && <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">Rechazada</span>}
+              {!isPending && !isRejected && <button
+                type="button"
+                role="switch"
+                aria-checked={isOn}
+                aria-label={`Sincronizado con ${link.organization_name}`}
+                onClick={() => void toggleEnterpriseLink(link.link_id, !isOn)}
+                disabled={togglingLinkId === link.link_id}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isOn ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-600'}`}
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${isOn ? 'left-6' : 'left-1'}`} />
+              </button>}
+            </div>;
+          })}
         </div>}
       </section>
 
