@@ -98,7 +98,9 @@ export function useGuestByDni(dni: string, tenantId: string | null) {
   return { guest, loading };
 }
 
-export function useStays(tenantId: string | null) {
+type StayQueryScope = { directOnly?: boolean; registeredBy?: string };
+
+export function useStays(tenantId: string | null, scope: StayQueryScope = {}) {
   const [stays, setStays] = useState<StayWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,11 +109,14 @@ export function useStays(tenantId: string | null) {
     if (!tenantId) { setStays([]); setLoading(false); return; }
     try {
       setLoading(true);
-      const { data, error: fetchError } = await getClient()
+      let query = getClient()
         .from('stays')
         .select('*, guests(*), rooms(*)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
+      if (scope.directOnly) query = query.is('empresa', null);
+      if (scope.registeredBy) query = query.eq('registered_by', scope.registeredBy);
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
       setStays(data || []);
@@ -120,7 +125,7 @@ export function useStays(tenantId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, scope.directOnly, scope.registeredBy]);
 
   useEffect(() => { fetchStays(); }, [fetchStays]);
 
@@ -156,7 +161,7 @@ export function useActiveStays(tenantId: string | null) {
   return { stays, loading, refetch: fetchStays };
 }
 
-export function useStayHistory(tenantId: string | null, roomId?: string) {
+export function useStayHistory(tenantId: string | null, roomId?: string, scope: StayQueryScope = {}) {
   const [stays, setStays] = useState<StayWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,11 +176,13 @@ export function useStayHistory(tenantId: string | null, roomId?: string) {
       .order('updated_at', { ascending: false });
 
     if (roomId) query = query.eq('room_id', roomId);
+    if (scope.directOnly) query = query.is('empresa', null);
+    if (scope.registeredBy) query = query.eq('registered_by', scope.registeredBy);
 
     const { data } = await query;
     setStays(data || []);
     setLoading(false);
-  }, [tenantId, roomId]);
+  }, [tenantId, roomId, scope.directOnly, scope.registeredBy]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -224,12 +231,15 @@ export function useCompanies(tenantId: string | null) {
 
 const DEFAULT_CONFIG: HotelConfig = {
   id: 0, tenant_id: '', name: 'Hotel Manager', logo_url: null,
+  contact_phone: null,
   razon_social: null, ruc: null, direccion: null,
   cuenta_bancaria: null, cci: null, n_detraccion: null,
   firma_url: null,
   yape_qr_url: null, plin_qr_url: null,
   notifications_enabled: false, notification_time: '07:00:00',
-  tax_settings: { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, pse_provider: '', environment: 'test' },
+  public_registration_token: '',
+  billing_module_enabled: false,
+  tax_settings: { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, ubigeo: '', department: '', province: '', district: '', fiscal_email: '', fiscal_phone: '', environment: 'test' },
   updated_at: '',
 };
 
@@ -251,20 +261,20 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
   const fetch = useCallback(async () => {
     if (!tenantId) { setConfig(DEFAULT_CONFIG); setLoading(false); return; }
     setLoading(true);
-    const { data } = await getClient()
-      .from('hotel_config')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
+    const [{ data }, { data: contactPhone }] = await Promise.all([
+      getClient().from('hotel_config').select('*').eq('tenant_id', tenantId).maybeSingle(),
+      sessionToken ? getClient().rpc('get_hotel_contact_phone', { p_session_token: sessionToken }) : Promise.resolve({ data: null }),
+    ]);
     if (data) {
       const remoteConfig = data as HotelConfig;
       setConfig({
         ...remoteConfig,
+        contact_phone: (contactPhone as string | null) ?? null,
         tax_settings: remoteConfig.tax_settings ?? readLocalTaxSettings(tenantId) ?? DEFAULT_CONFIG.tax_settings,
       });
     }
     setLoading(false);
-  }, [tenantId]);
+  }, [tenantId, sessionToken]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -274,6 +284,7 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
 
     // Logo and firma are sent separately to avoid huge payloads in the fields call
     const hasLogoChange  = 'logo_url'  in updates;
+    const hasContactPhoneChange = 'contact_phone' in updates;
     const hasFirmaChange = 'firma_url' in updates;
     const hasPaymentQrChange = 'yape_qr_url' in updates || 'plin_qr_url' in updates;
     const hasNotificationChange = 'notifications_enabled' in updates || 'notification_time' in updates;
@@ -308,6 +319,14 @@ export function useHotelConfig(tenantId: string | null, sessionToken?: string) {
         p_logo_url:      updates.logo_url ?? null,
       });
       if (logoErr) return { error: logoErr.message };
+    }
+
+    if (hasContactPhoneChange) {
+      const { error: contactPhoneErr } = await getClient().rpc('save_hotel_contact_phone', {
+        p_session_token: sessionToken,
+        p_contact_phone: updates.contact_phone ?? null,
+      });
+      if (contactPhoneErr) return { error: contactPhoneErr.message };
     }
 
     if (hasFirmaChange) {

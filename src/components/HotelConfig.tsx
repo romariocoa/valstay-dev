@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
-import { HotelConfig as HotelConfigType } from '../lib/supabase';
-import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing, Landmark } from 'lucide-react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import QRCode from 'qrcode';
+import { getClient, HotelConfig as HotelConfigType } from '../lib/supabase';
+import { Hotel, Save, Upload, X, CheckCircle, FileText, Camera, PenLine, QrCode, ChevronDown, ChevronUp, BellRing, Landmark, KeyRound, ShieldCheck, RefreshCw, Copy, ExternalLink, Download, Link2, LockKeyhole } from 'lucide-react';
 
 interface HotelConfigProps {
   config: HotelConfigType;
+  sessionToken: string;
+  billingEnabled?: boolean;
   onSave: (updates: Partial<HotelConfigType>) => Promise<{ error?: string }>;
   notificationPermission: NotificationPermission;
   pushSubscriptionActive: boolean;
@@ -13,9 +16,14 @@ interface HotelConfigProps {
   onSendTestNotification: () => Promise<void>;
 }
 
-export function HotelConfig({ config, onSave, notificationPermission, pushSubscriptionActive, pushSubscriptionLoading, pushSubscriptionError, onToggleNotifications, onSendTestNotification }: HotelConfigProps) {
+type SunatServiceState = { status: string; code: string; message: string };
+type SunatConnectionState = { connected: boolean; overallStatus?: 'connected' | 'partial' | 'disconnected' | 'unknown'; code: string; message: string; environment?: string; certificate?: { expiresAt?: string }; services?: { invoice: SunatServiceState; consultation: SunatServiceState; summary: SunatServiceState } };
+type SunatHistoryRow = { checked_at: string; overall_status: string; code: string; message: string };
+
+export function HotelConfig({ config, sessionToken, billingEnabled = false, onSave, notificationPermission, pushSubscriptionActive, pushSubscriptionLoading, pushSubscriptionError, onToggleNotifications, onSendTestNotification }: HotelConfigProps) {
   const [name, setName]                       = useState(config.name);
   const [logoUrl, setLogoUrl]                 = useState(config.logo_url ?? '');
+  const [contactPhone, setContactPhone]       = useState(config.contact_phone ?? '');
   const [razonSocial, setRazonSocial]         = useState(config.razon_social ?? '');
   const [ruc, setRuc]                         = useState(config.ruc ?? '');
   const [direccion, setDireccion]             = useState(config.direccion ?? '');
@@ -28,23 +36,135 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
   const [notificationsEnabled, setNotificationsEnabled] = useState(config.notifications_enabled ?? false);
   const [notificationTime, setNotificationTime] = useState((config.notification_time ?? '07:00').slice(0, 5));
   const [openSection, setOpenSection] = useState<'hotel' | 'valuation' | 'payments' | 'notifications' | 'sunat' | null>(null);
-  const defaultTaxSettings = { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, pse_provider: '', environment: 'test' as const };
-  const [taxSettings, setTaxSettings] = useState(config.tax_settings ?? defaultTaxSettings);
+  const defaultTaxSettings = { enabled: false, invoice_series: 'F001', receipt_series: 'B001', igv_rate: 18, prices_include_igv: true, ubigeo: '', department: '', province: '', district: '', fiscal_email: '', fiscal_phone: '', environment: 'test' as const };
+  const [taxSettings, setTaxSettings] = useState({ ...defaultTaxSettings, ...(config.tax_settings ?? {}) });
   const [saving, setSaving]                   = useState(false);
   const [success, setSuccess]                 = useState(false);
   const [error, setError]                     = useState('');
+  const [solUser, setSolUser] = useState('');
+  const [solPassword, setSolPassword] = useState('');
+  const [certificatePassword, setCertificatePassword] = useState('');
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [sunatStatus, setSunatStatus] = useState({ sol_user_configured: false, sol_password_configured: false, certificate_configured: false, certificate_password_configured: false, certificate_filename: '' });
+  const [savingSunat, setSavingSunat] = useState(false);
+  const [sunatMessage, setSunatMessage] = useState('');
+  const [checkingSunat, setCheckingSunat] = useState(false);
+  const [sunatConnection, setSunatConnection] = useState<SunatConnectionState | null>(null);
+  const [sunatLastCheckedAt, setSunatLastCheckedAt] = useState<Date | null>(null);
+  const [sunatHistory, setSunatHistory] = useState<SunatHistoryRow[]>([]);
   const [previewError, setPreviewError]       = useState(false);
+  const [registrationToken, setRegistrationToken] = useState(config.public_registration_token ?? '');
+  const [registrationQr, setRegistrationQr] = useState('');
+  const [registrationMessage, setRegistrationMessage] = useState('');
   const fileRef    = useRef<HTMLInputElement>(null);
   const cameraRef  = useRef<HTMLInputElement>(null);
   const firmaFileRef   = useRef<HTMLInputElement>(null);
   const firmaCameraRef = useRef<HTMLInputElement>(null);
   const yapeQrRef = useRef<HTMLInputElement>(null);
   const plinQrRef = useRef<HTMLInputElement>(null);
+  const certificateRef = useRef<HTMLInputElement>(null);
+  const registrationUrl = registrationToken ? `${window.location.origin}/reservacion/${registrationToken}` : '';
+
+  useEffect(() => {
+    if (!registrationUrl) return setRegistrationQr('');
+    QRCode.toDataURL(registrationUrl, { width: 320, margin: 2, errorCorrectionLevel: 'M' }).then(setRegistrationQr).catch(() => setRegistrationQr(''));
+  }, [registrationUrl]);
+
+  const copyRegistrationUrl = async () => {
+    await navigator.clipboard.writeText(registrationUrl);
+    setRegistrationMessage('Enlace copiado.');
+  };
+
+  const regenerateRegistrationUrl = async () => {
+    if (!window.confirm('El enlace anterior dejará de funcionar. ¿Generar uno nuevo?')) return;
+    const { data, error: rpcError } = await getClient().rpc('regenerate_public_registration_token', { p_session_token: sessionToken });
+    if (rpcError || !data) { setRegistrationMessage(rpcError?.message ?? 'No se pudo generar el enlace.'); return; }
+    setRegistrationToken(String(data));
+    setRegistrationMessage('Nuevo enlace generado. El anterior ya no funciona.');
+  };
+
+  useEffect(() => {
+    if (!billingEnabled) return;
+    getClient().rpc('get_sunat_credentials_status', { p_session_token: sessionToken }).then(({ data }) => {
+      if (data?.[0]) setSunatStatus({ ...data[0], certificate_filename: data[0].certificate_filename ?? '' });
+    });
+  }, [billingEnabled, sessionToken]);
+
+  const saveSunatCredentials = async () => {
+    if (!solUser && !solPassword && !certificateFile && !certificatePassword) {
+      setSunatMessage('Ingresa al menos un dato nuevo para guardar.');
+      return;
+    }
+    setSavingSunat(true);
+    setSunatMessage('');
+    let certificateBase64: string | null = null;
+    if (certificateFile) {
+      const bytes = new Uint8Array(await certificateFile.arrayBuffer());
+      if (!bytes.length || bytes[0] !== 0x30) {
+        setSavingSunat(false);
+        setSunatMessage('El archivo seleccionado no tiene estructura PKCS#12 binaria. Exporta nuevamente el certificado como P12/PFX incluyendo la clave privada.');
+        return;
+      }
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      certificateBase64 = btoa(binary);
+    }
+    const { error: credentialsError } = await getClient().rpc('save_sunat_credentials', {
+      p_session_token: sessionToken,
+      p_sol_user: solUser.trim() || null,
+      p_sol_password: solPassword || null,
+      p_certificate_base64: certificateBase64,
+      p_certificate_password: certificatePassword || null,
+      p_certificate_filename: certificateFile?.name ?? null,
+    });
+    setSavingSunat(false);
+    if (credentialsError) { setSunatMessage(credentialsError.message); return; }
+    setSunatStatus(current => ({
+      sol_user_configured: current.sol_user_configured || Boolean(solUser),
+      sol_password_configured: current.sol_password_configured || Boolean(solPassword),
+      certificate_configured: current.certificate_configured || Boolean(certificateFile),
+      certificate_password_configured: current.certificate_password_configured || Boolean(certificatePassword),
+      certificate_filename: certificateFile?.name ?? current.certificate_filename,
+    }));
+    setSolUser(''); setSolPassword(''); setCertificatePassword(''); setCertificateFile(null);
+    setSunatConnection(null);
+    if (certificateRef.current) certificateRef.current.value = '';
+    setSunatMessage('Credenciales cifradas y guardadas correctamente.');
+  };
+
+  const loadSunatHistory = useCallback(async () => {
+    const { data } = await getClient().rpc('list_sunat_connection_checks', { p_session_token: sessionToken, p_limit: 12 });
+    if (data) setSunatHistory(data as SunatHistoryRow[]);
+  }, [sessionToken]);
+
+  const checkSunatConnection = useCallback(async () => {
+    setCheckingSunat(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-sunat-connection`, {
+        method: 'POST',
+        headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'x-session-token': sessionToken, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const result = await response.json();
+      const nextConnection: SunatConnectionState = { connected: Boolean(result.connected), overallStatus: result.overallStatus, code: result.code || 'unknown', message: result.message || 'SUNAT no devolvió un resultado reconocible.', environment: result.environment, certificate: result.certificate, services: result.services };
+      setSunatConnection(nextConnection);
+      if (nextConnection.connected && 'Notification' in window && Notification.permission === 'granted') new Notification('ValStay · SUNAT conectado', { body: nextConnection.message, icon: '/valstay.png', tag: 'valstay-sunat-test' });
+    } catch {
+      const message = 'No fue posible ejecutar la comprobación de SUNAT.';
+      setSunatConnection({ connected: false, code: 'network_error', message });
+    } finally { setCheckingSunat(false); setSunatLastCheckedAt(new Date()); await loadSunatHistory(); }
+  }, [loadSunatHistory, sessionToken]);
+
+  useEffect(() => {
+    if (!billingEnabled || openSection !== 'sunat') return;
+    void loadSunatHistory();
+  }, [billingEnabled, loadSunatHistory, openSection]);
 
   const [lastConfigId, setLastConfigId] = useState(config.updated_at);
   if (config.updated_at !== lastConfigId) {
     setName(config.name);
     setLogoUrl(config.logo_url ?? '');
+    setContactPhone(config.contact_phone ?? '');
     setRazonSocial(config.razon_social ?? '');
     setRuc(config.ruc ?? '');
     setDireccion(config.direccion ?? '');
@@ -56,7 +176,8 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
     setPlinQrUrl(config.plin_qr_url ?? '');
     setNotificationsEnabled(config.notifications_enabled ?? false);
     setNotificationTime((config.notification_time ?? '07:00').slice(0, 5));
-    setTaxSettings(config.tax_settings ?? defaultTaxSettings);
+    setTaxSettings({ ...defaultTaxSettings, ...(config.tax_settings ?? {}) });
+    setRegistrationToken(config.public_registration_token ?? '');
     setLastConfigId(config.updated_at);
   }
 
@@ -165,7 +286,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError('El nombre no puede estar vacío.'); return; }
-    if (taxSettings.enabled && (!/^\d{11}$/.test(ruc) || !razonSocial.trim() || !direccion.trim())) { setError('Para activar SUNAT completa el RUC, la razón social y la dirección fiscal.'); setOpenSection('sunat'); return; }
+    if (taxSettings.enabled && (!/^\d{11}$/.test(ruc) || !razonSocial.trim() || !direccion.trim() || !/^\d{6}$/.test(taxSettings.ubigeo) || !taxSettings.department.trim() || !taxSettings.province.trim() || !taxSettings.district.trim())) { setError('Para activar SUNAT completa RUC, razón social, dirección, UBIGEO, departamento, provincia y distrito.'); setOpenSection('sunat'); return; }
     if (!/^F[A-Z0-9]{3}$/.test(taxSettings.invoice_series.toUpperCase()) || !/^B[A-Z0-9]{3}$/.test(taxSettings.receipt_series.toUpperCase())) { setError('Usa series válidas, por ejemplo F001 y B001.'); setOpenSection('sunat'); return; }
     setError('');
     setSaving(true);
@@ -173,6 +294,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
     const { error: err } = await onSave({
       name: name.trim(),
       logo_url: logoUrl.trim() || null,
+      contact_phone: contactPhone.trim() || null,
       razon_social: razonSocial.trim() || null,
       ruc: ruc.trim() || null,
       direccion: direccion.trim() || null,
@@ -190,6 +312,15 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
     if (err) { setError(err); return; }
     setSuccess(true);
     setTimeout(() => setSuccess(false), 3000);
+  };
+
+  const toggleSunatEnvironment = () => {
+    const nextEnvironment = taxSettings.environment === 'production' ? 'test' : 'production';
+    const message = nextEnvironment === 'production'
+      ? '¿Cambiar a SUNAT PRODUCCIÓN? Las próximas boletas y facturas que envíes serán comprobantes tributarios reales y consumirán correlativo.'
+      : '¿Volver a SUNAT PRUEBAS? No uses este entorno para emitir comprobantes reales.';
+    if (!window.confirm(message)) return;
+    setTaxSettings(current => ({ ...current, environment: nextEnvironment }));
   };
 
   const disableNotificationsForAll = async () => {
@@ -222,7 +353,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
   const labelCls = 'block text-sm font-semibold text-gray-700 dark:text-zinc-300 mb-1.5';
 
   return (
-    <div className="max-w-2xl flex flex-col gap-6">
+    <div className="flex w-full max-w-none flex-col gap-6">
       {/* Live preview */}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 flex items-center gap-4">
         <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center overflow-hidden shrink-0 border border-white/20">
@@ -321,7 +452,7 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
             <Hotel className="w-5 h-5 text-gray-600 dark:text-zinc-400" />
             <div className="flex-1">
               <h3 className="text-base font-bold text-gray-800 dark:text-zinc-100">Datos del hospedaje</h3>
-              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">Nombre, identidad visual y logo</p>
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">Nombre, teléfono, identidad visual y logo</p>
             </div>
             {openSection === 'hotel' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
@@ -336,6 +467,18 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
                 className={inputCls}
               />
               <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">Aparece en la barra lateral y en la pantalla de inicio de sesion.</p>
+            </div>
+
+            <div>
+              <label className={labelCls}>Teléfono de contacto (WhatsApp)</label>
+              <input
+                type="tel"
+                value={contactPhone}
+                onChange={e => setContactPhone(e.target.value.replace(/[^\d+\s()-]/g, '').slice(0, 25))}
+                placeholder="Ej: 987 654 321"
+                className={inputCls}
+              />
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">Aquí llegan los avisos de asignaciones de personal por WhatsApp (ValStay Empresa).</p>
             </div>
 
             <div>
@@ -384,6 +527,19 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
                   Usar icono predeterminado (sin logo)
                 </button>
               )}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
+              <div className="flex items-start gap-3"><Link2 className="mt-0.5 h-5 w-5 shrink-0 text-gray-700 dark:text-zinc-200" /><div><p className="text-sm font-black text-gray-900 dark:text-white">Enlace público de reservaciones</p><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">El huésped completa sus datos y recepción recibe una solicitud para asignarle una habitación.</p></div></div>
+              {registrationUrl && <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="min-w-0"><input readOnly value={registrationUrl} onFocus={event => event.currentTarget.select()} className={`${inputCls} font-mono text-xs`} /><div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" onClick={copyRegistrationUrl} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white dark:bg-white dark:text-black"><Copy className="h-4 w-4" />Copiar</button>
+                  <a href={registrationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 dark:border-zinc-600 dark:text-zinc-200"><ExternalLink className="h-4 w-4" />Abrir formulario</a>
+                  {registrationQr && <a href={registrationQr} download={`qr-reservaciones-${name.replace(/\s+/g, '-').toLowerCase()}.png`} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 dark:border-zinc-600 dark:text-zinc-200"><Download className="h-4 w-4" />Descargar QR</a>}
+                  <button type="button" onClick={regenerateRegistrationUrl} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><RefreshCw className="h-4 w-4" />Regenerar</button>
+                </div></div>{registrationQr && <img src={registrationQr} alt="QR de reservaciones" className="mx-auto h-32 w-32 rounded-lg border border-gray-200 bg-white p-1 dark:border-zinc-600" />}
+              </div>}
+              {registrationMessage && <p className="mt-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{registrationMessage}</p>}
             </div>
           </div>}
         </section>
@@ -468,23 +624,23 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
         </section>
 
         {/* ── Facturación electrónica ── */}
-        <section className="order-3 rounded-xl border border-gray-200 dark:border-zinc-700 overflow-hidden">
-          <button type="button" onClick={() => setOpenSection(current => current === 'sunat' ? null : 'sunat')}
+        <section className={`order-3 overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-700 ${billingEnabled ? '' : 'opacity-50'}`}>
+          <button type="button" disabled={!billingEnabled} onClick={() => setOpenSection(current => current === 'sunat' ? null : 'sunat')}
             aria-expanded={openSection === 'sunat'}
-            className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+            className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 disabled:cursor-not-allowed dark:hover:bg-zinc-800 transition-colors">
             <Landmark className="w-5 h-5 text-red-600 dark:text-red-400" />
             <div className="flex-1">
               <h3 className="text-base font-bold text-gray-800 dark:text-zinc-100">Facturación electrónica / SUNAT</h3>
-              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{taxSettings.enabled ? `${taxSettings.environment === 'production' ? 'Producción' : 'Pruebas'} · ${taxSettings.pse_provider || 'PSE por definir'}` : 'Sin activar'}</p>
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{billingEnabled ? (taxSettings.enabled ? `${taxSettings.environment === 'production' ? 'Producción' : 'Pruebas'} · Conexión directa SUNAT` : 'Sin activar') : 'Actualiza tu plan para habilitar esta configuración'}</p>
             </div>
-            {openSection === 'sunat' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+            {!billingEnabled ? <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black uppercase text-gray-500 dark:bg-zinc-800 dark:text-zinc-400"><LockKeyhole className="h-3 w-3" />Plan</span> : openSection === 'sunat' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
-          {openSection === 'sunat' && <div className="space-y-4 border-t border-gray-100 px-4 pb-4 pt-4 dark:border-zinc-800">
+          {billingEnabled && openSection === 'sunat' && <div className="space-y-4 border-t border-gray-100 px-4 pb-4 pt-4 dark:border-zinc-800">
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
-              Esta sección prepara ValStay para conectarse a un PSE. Las claves privadas se configurarán como secretos seguros en Supabase y nunca se guardarán aquí.
+              Conexión directa con SUNAT mediante XML UBL 2.1 y certificado digital. Las claves privadas se guardan cifradas y nunca se muestran nuevamente.
             </div>
             <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800">
-              <span><span className="block text-sm font-bold text-gray-800 dark:text-zinc-100">Activar facturación electrónica</span><span className="text-xs text-gray-500 dark:text-zinc-400">Habilitar al completar la conexión con el PSE</span></span>
+              <span><span className="block text-sm font-bold text-gray-800 dark:text-zinc-100">Activar facturación electrónica</span><span className="text-xs text-gray-500 dark:text-zinc-400">Primero valida una factura y una boleta en pruebas SUNAT</span></span>
               <input type="checkbox" checked={taxSettings.enabled} onChange={e => setTaxSettings(current => ({ ...current, enabled: e.target.checked }))} className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500" />
             </label>
 
@@ -495,11 +651,59 @@ export function HotelConfig({ config, onSave, notificationPermission, pushSubscr
               <div><label className={labelCls}>Serie de factura</label><input value={taxSettings.invoice_series} onChange={e => setTaxSettings(current => ({ ...current, invoice_series: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }))} placeholder="F001" className={inputCls} /></div>
               <div><label className={labelCls}>Serie de boleta</label><input value={taxSettings.receipt_series} onChange={e => setTaxSettings(current => ({ ...current, receipt_series: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }))} placeholder="B001" className={inputCls} /></div>
               <div><label className={labelCls}>IGV (%)</label><input type="number" min="0" max="100" step="0.01" value={taxSettings.igv_rate} onChange={e => setTaxSettings(current => ({ ...current, igv_rate: Number(e.target.value) }))} className={inputCls} /></div>
-              <div><label className={labelCls}>Entorno</label><select value={taxSettings.environment} onChange={e => setTaxSettings(current => ({ ...current, environment: e.target.value as 'test' | 'production' }))} className={inputCls}><option value="test">Pruebas</option><option value="production">Producción</option></select></div>
-              <div className="sm:col-span-2"><label className={labelCls}>Proveedor PSE</label><input value={taxSettings.pse_provider} onChange={e => setTaxSettings(current => ({ ...current, pse_provider: e.target.value }))} placeholder="Ej: proveedor autorizado por SUNAT" className={inputCls} /></div>
+              <div>
+                <label className={labelCls}>Entorno SUNAT</label>
+                <button type="button" role="switch" aria-checked={taxSettings.environment === 'production'} onClick={toggleSunatEnvironment} className={`flex h-[42px] w-full items-center justify-between rounded-xl border px-3 transition-colors ${taxSettings.environment === 'production' ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+                  <span className="text-sm font-bold">{taxSettings.environment === 'production' ? 'Producción real' : 'Modo de pruebas'}</span>
+                  <span className={`relative h-6 w-11 rounded-full transition-colors ${taxSettings.environment === 'production' ? 'bg-emerald-600' : 'bg-amber-500'}`}>
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${taxSettings.environment === 'production' ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </span>
+                </button>
+              </div>
+              <div><label className={labelCls}>UBIGEO fiscal *</label><input value={taxSettings.ubigeo} onChange={e => setTaxSettings(current => ({ ...current, ubigeo: e.target.value.replace(/\D/g, '').slice(0, 6) }))} inputMode="numeric" placeholder="6 dígitos" className={inputCls} /></div>
+              <div><label className={labelCls}>Departamento *</label><input value={taxSettings.department} onChange={e => setTaxSettings(current => ({ ...current, department: e.target.value }))} className={inputCls} /></div>
+              <div><label className={labelCls}>Provincia *</label><input value={taxSettings.province} onChange={e => setTaxSettings(current => ({ ...current, province: e.target.value }))} className={inputCls} /></div>
+              <div><label className={labelCls}>Distrito *</label><input value={taxSettings.district} onChange={e => setTaxSettings(current => ({ ...current, district: e.target.value }))} className={inputCls} /></div>
+              <div><label className={labelCls}>Correo de facturación</label><input type="email" value={taxSettings.fiscal_email} onChange={e => setTaxSettings(current => ({ ...current, fiscal_email: e.target.value }))} placeholder="facturacion@hospedaje.com" className={inputCls} /></div>
+              <div><label className={labelCls}>Teléfono de facturación</label><input type="tel" value={taxSettings.fiscal_phone} onChange={e => setTaxSettings(current => ({ ...current, fiscal_phone: e.target.value.replace(/[^\d+\s()-]/g, '').slice(0, 25) }))} placeholder="Ej: 987 654 321" className={inputCls} /></div>
             </div>
             <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-zinc-300"><input type="checkbox" checked={taxSettings.prices_include_igv} onChange={e => setTaxSettings(current => ({ ...current, prices_include_igv: e.target.checked }))} className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />Las tarifas registradas ya incluyen IGV</label>
-            {taxSettings.environment === 'production' && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Producción debe activarse únicamente después de completar y validar las pruebas con el PSE.</p>}
+            {taxSettings.environment === 'production' && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Producción debe activarse únicamente después de que SUNAT acepte una factura y una boleta en el entorno de pruebas.</p>}
+            <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Save className="h-4 w-4" />}{saving ? 'Guardando…' : 'Guardar configuración SUNAT'}</button>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/60">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"><ShieldCheck className="h-5 w-5" /></div>
+                <div><p className="text-sm font-bold text-gray-800 dark:text-zinc-100">Credenciales para conexión directa</p><p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">Los campos quedan vacíos después de guardarse. ValStay nunca vuelve a mostrar las claves.</p></div>
+              </div>
+              <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+                {[
+                  ['Usuario SOL', sunatStatus.sol_user_configured], ['Clave SOL', sunatStatus.sol_password_configured],
+                  ['Certificado', sunatStatus.certificate_configured], ['Clave del certificado', sunatStatus.certificate_password_configured],
+                ].map(([label, ready]) => <div key={String(label)} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 dark:bg-zinc-900"><span className={`h-2 w-2 rounded-full ${ready ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-600'}`} /><span className="text-gray-600 dark:text-zinc-300">{label}</span></div>)}
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div><label className={labelCls}>Usuario SOL</label><div className="relative"><KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input value={solUser} onChange={e => setSolUser(e.target.value)} autoComplete="off" placeholder={sunatStatus.sol_user_configured ? 'Configurado · ingresa para reemplazar' : 'Usuario secundario SOL'} className={`${inputCls} pl-10`} /></div></div>
+                <div><label className={labelCls}>Clave SOL</label><input type="password" value={solPassword} onChange={e => setSolPassword(e.target.value)} autoComplete="new-password" placeholder={sunatStatus.sol_password_configured ? 'Configurada · ingresa para reemplazar' : 'Clave SOL'} className={inputCls} /></div>
+                <div><label className={labelCls}>Certificado digital</label><input ref={certificateRef} type="file" accept=".pfx,.p12,application/x-pkcs12" onChange={e => setCertificateFile(e.target.files?.[0] ?? null)} className={`${inputCls} file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1 file:text-xs file:font-bold dark:file:bg-zinc-700`} /><p className="mt-1 text-[11px] text-gray-400">{certificateFile?.name || sunatStatus.certificate_filename || 'Archivo .pfx o .p12'}</p></div>
+                <div><label className={labelCls}>Contraseña del certificado</label><input type="password" value={certificatePassword} onChange={e => setCertificatePassword(e.target.value)} autoComplete="new-password" placeholder={sunatStatus.certificate_password_configured ? 'Configurada · ingresa para reemplazar' : 'Contraseña del certificado'} className={inputCls} /></div>
+              </div>
+              {sunatMessage && <p className={`mt-3 rounded-lg px-3 py-2 text-xs font-medium ${sunatMessage.includes('correctamente') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'}`}>{sunatMessage}</p>}
+              <button type="button" onClick={() => void saveSunatCredentials()} disabled={savingSunat} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{savingSunat ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <ShieldCheck className="h-4 w-4" />}{savingSunat ? 'Cifrando y guardando…' : 'Guardar credenciales seguras'}</button>
+              <div className="mt-4 border-t border-gray-200 pt-4 dark:border-zinc-700">
+                <div className="flex items-center justify-between gap-3">
+                  <div><p className="text-sm font-bold text-gray-800 dark:text-zinc-100">Servicios SUNAT</p><p className="text-xs text-gray-500 dark:text-zinc-400">Consulta cada servicio por separado sin emitir documentos.</p></div>
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black ${sunatConnection?.overallStatus === 'connected' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : sunatConnection?.overallStatus === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' : sunatConnection ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-zinc-400'}`}><span className={`h-2 w-2 rounded-full ${sunatConnection?.overallStatus === 'connected' ? 'bg-emerald-500' : sunatConnection?.overallStatus === 'partial' ? 'bg-amber-500' : sunatConnection ? 'bg-red-500' : 'bg-gray-400'}`} />{sunatConnection?.overallStatus === 'connected' ? 'Conectado' : sunatConnection?.overallStatus === 'partial' ? 'Conexión parcial' : sunatConnection ? 'No verificado' : 'Sin comprobar'}</span>
+                </div>
+                {sunatConnection && <div className={`mt-3 rounded-lg border px-3 py-2 text-xs font-medium ${sunatConnection.overallStatus === 'connected' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' : sunatConnection.overallStatus === 'partial' ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300'}`}><p className="font-bold">{sunatConnection.overallStatus === 'connected' ? 'Servicios conectados' : sunatConnection.overallStatus === 'partial' ? 'Conexión parcial con SUNAT' : 'Servicios no verificados'}</p><p className="mt-1">{sunatConnection.message}</p>{sunatConnection.certificate?.expiresAt && <p className="mt-1 opacity-80">Certificado vigente hasta: {new Date(sunatConnection.certificate.expiresAt).toLocaleDateString('es-PE')}</p>}</div>}
+                {sunatConnection?.services && <div className="mt-3 grid gap-2 sm:grid-cols-3">{[
+                  ['Facturas', sunatConnection.services.invoice], ['Consulta CDR', sunatConnection.services.consultation], ['Resumen de boletas', sunatConnection.services.summary],
+                ].map(([serviceLabel, service]) => { const state = service as SunatServiceState; const good = ['connected','last_accepted'].includes(state.status); const warning = state.status === 'unknown'; return <div key={String(serviceLabel)} className={`rounded-lg border p-2 text-[11px] ${good ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300' : warning ? 'border-gray-200 bg-gray-50 text-gray-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300'}`}><p className="font-black">{serviceLabel as string}</p><p className="mt-1 leading-relaxed">{state.message}</p><p className="mt-1 opacity-70">Código: {state.code}</p></div>; })}</div>}
+                {sunatLastCheckedAt && <p className="mt-2 text-right text-[11px] text-gray-400">Última comprobación: {sunatLastCheckedAt.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })} · prueba automática cada 5 min</p>}
+                <button type="button" onClick={() => void checkSunatConnection()} disabled={checkingSunat || savingSunat} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"><RefreshCw className={`h-4 w-4 ${checkingSunat ? 'animate-spin' : ''}`} />{checkingSunat ? 'Comprobando con SUNAT…' : 'Comprobar conexión con SUNAT'}</button>
+                {sunatHistory.length > 0 && <details className="mt-3 rounded-lg border border-gray-200 p-3 dark:border-zinc-700"><summary className="cursor-pointer text-xs font-bold text-gray-600 dark:text-zinc-300">Historial del servidor ({sunatHistory.length})</summary><div className="mt-2 max-h-48 space-y-1 overflow-y-auto">{sunatHistory.map((entry, index) => <div key={`${entry.checked_at}-${index}`} className="flex items-start justify-between gap-3 border-t border-gray-100 py-2 text-[11px] first:border-0 dark:border-zinc-800"><div><p className="font-bold text-gray-700 dark:text-zinc-200">{entry.overall_status === 'connected' ? 'Conectado' : entry.overall_status === 'partial' ? 'Parcial' : 'No verificado'}</p><p className="text-gray-400">{entry.message}</p></div><time className="shrink-0 text-gray-400">{new Date(entry.checked_at).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>)}</div></details>}
+              </div>
+            </div>
           </div>}
         </section>
 

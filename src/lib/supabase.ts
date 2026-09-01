@@ -48,6 +48,7 @@ export type Guest = {
   phone: string | null;
   email: string | null;
   address: string | null;
+  night_shift: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -62,11 +63,16 @@ export type Stay = {
   baja_end_date: string | null;
   status: 'active' | 'checked_out' | 'baja' | 'completed';
   total_amount: number | null;
+  amount_paid: number;
   notes: string | null;
+  requested_document_type: 'boleta' | 'factura' | null;
   empresa: string | null;
   worker_type: 'obrero' | 'empleado' | 'staff' | null;
   payment_method: 'efectivo' | 'tarjeta' | 'yape' | 'plin' | null;
   payment_receipt_url: string | null;
+  registered_by: string | null;
+  registered_by_name: string | null;
+  registered_by_role: string | null;
   created_at: string;
   updated_at: string;
   guests?: Guest;
@@ -89,6 +95,7 @@ export type HotelConfig = {
   tenant_id: string;
   name: string;
   logo_url: string | null;
+  contact_phone: string | null;
   razon_social: string | null;
   ruc: string | null;
   direccion: string | null;
@@ -100,13 +107,20 @@ export type HotelConfig = {
   plin_qr_url: string | null;
   notifications_enabled: boolean;
   notification_time: string;
+  public_registration_token: string;
+  billing_module_enabled: boolean;
   tax_settings: {
     enabled: boolean;
     invoice_series: string;
     receipt_series: string;
     igv_rate: number;
     prices_include_igv: boolean;
-    pse_provider: string;
+    ubigeo: string;
+    department: string;
+    province: string;
+    district: string;
+    fiscal_email: string;
+    fiscal_phone: string;
     environment: 'test' | 'production';
   };
   updated_at: string;
