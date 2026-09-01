@@ -486,7 +486,7 @@ export function HotelConfig({ config, sessionToken, billingEnabled = false, onSa
             return <div key={link.link_id} className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-3 py-3 dark:border-zinc-700">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-gray-700 dark:text-zinc-200">{link.organization_name}</p>
-                <p className="mt-0.5 text-xs text-gray-400 dark:text-zinc-500">RUC {link.ruc} · {link.workers_count} trabajador(es)</p>
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-zinc-500">RUC {link.ruc}</p>
               </div>
               {isPending && <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">Pendiente</span>}
               {isRejected && <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 dark:bg-zinc-800 dark:text-zinc-400">Rechazada</span>}
