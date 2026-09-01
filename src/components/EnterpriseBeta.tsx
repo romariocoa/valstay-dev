@@ -194,27 +194,74 @@ export function EnterpriseBeta(){
  const downloadValuationPdf=async()=>{setValuationBusy(true);const prep=await prepareValuation();setValuationBusy(false);if(!prep||!hotelDetail||!session)return;const{days,rows}=prep;
   const{jsPDF}=await import('jspdf');
   const{default:autoTable}=await import('jspdf-autotable');
+  const MONTHS_ES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const DOW=['D','L','M','X','J','V','S'];
   const grandTotal=rows.reduce((a,r)=>a+r.total,0);
-  const totalCant=rows.reduce((a,r)=>a+r.cant,0);
+  const totalDias=rows.reduce((a,r)=>a+r.cant,0);
   const doc=new jsPDF({orientation:'landscape',format:'a4',unit:'mm'});
   const pageW=doc.internal.pageSize.getWidth();
-  const margin=12;let y=margin;
-  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(hotelDetail.name.toUpperCase(),pageW/2,y+5,{align:'center'});
-  doc.setFontSize(11);doc.setTextColor(60,60,60);doc.text('VALORIZACIÓN DE PERSONAL',pageW/2,y+12,{align:'center'});doc.setTextColor(0,0,0);
-  y+=20;
-  doc.setFillColor(184,204,228);doc.roundedRect(margin,y-1,pageW-margin*2,8,1,1,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(8.5);
-  doc.text(`EMPRESA: ${session.organizationName}   |   DEL ${fmtDate(valuation.startDate).toUpperCase()} AL ${fmtDate(valuation.endDate).toUpperCase()}`,pageW/2,y+4.5,{align:'center'});
-  y+=12;
-  const usable=pageW-margin*2;
-  const W_NUM=6,W_NAME=45,W_CARGO=18,W_DNI=16,W_CANT=8,W_TAR=14,W_TOT=18;
-  const fixedW=W_NUM+W_NAME+W_CARGO+W_DNI,tailW=W_CANT+W_TAR+W_TOT;
-  const dayW=Math.max(5,(usable-fixedW-tailW)/days.length);
-  const head=[['N°','NOMBRES Y APELLIDOS','CARGO','DNI',...days.map(d=>`${d.getDate()}`),'CANT','TARIFA','TOTAL']];
+  const margin=10;let y=margin;
+
+  const providerRows:[string,string][]=[
+   ['DATOS PROVEEDOR:',hotelDetail.razon_social||''],['NOMBRE COMERCIAL:',hotelDetail.name||''],
+   ['RAZON SOCIAL:',hotelDetail.razon_social||''],['RUBRO:','HOSPEDAJE'],
+   ['RUC:',hotelDetail.ruc||''],['DIRECCIÓN:',hotelDetail.direccion||''],
+   ['CONTACTO:',hotelDetail.razon_social||''],['N° DE TELEFONO:',hotelDetail.contact_phone||''],
+   ['CORREO ELECTRONICO:',hotelDetail.fiscal_email||''],['CUENTA DE AHORRO:',hotelDetail.cuenta_bancaria||''],
+   ['CUENTA INTERBANCARIA:',hotelDetail.cci||''],['CUENTA DE DETRACCION:',hotelDetail.n_detraccion||''],
+   ['PERIODO DE VALORIZACIÓN:',`DEL ${fmtDate(valuation.startDate).toUpperCase()} AL ${fmtDate(valuation.endDate).toUpperCase()}`],
+  ];
+  doc.setFontSize(7.5);
+  providerRows.forEach(([label,value],i)=>{
+   doc.setFont('helvetica','bold');doc.text(label,margin,y+i*4.2);
+   doc.setFont('helvetica','normal');doc.text(value,margin+38,y+i*4.2);
+  });
+  y+=providerRows.length*4.2+4;
+
+  const bands:{label:string;start:number;end:number}[]=[];
+  {let curKey='',start=0;
+   days.forEach((d,i)=>{const key=`${d.getFullYear()}-${d.getMonth()}`;if(key!==curKey){if(curKey!=='')bands.push({label:MONTHS_ES[days[i-1].getMonth()],start,end:i-1});curKey=key;start=i}});
+   bands.push({label:MONTHS_ES[days[days.length-1].getMonth()],start,end:days.length-1});
+  }
+
+  const FIXED_LABELS=['ITEM','DNI','APELLIDOS Y NOMBRES','CARGO','Nº HAB','HABITACION'];
+  const fixedHead=FIXED_LABELS.map(label=>({content:label,rowSpan:3,styles:{halign:'center' as const,valign:'middle' as const,fillColor:[0,112,192] as [number,number,number],textColor:255,fontStyle:'bold' as const}}));
+  const tailHead=['TOTAL DE\nDÍAS','PRECIO\nUNITARIO\nS/','TOTAL\nS/.'].map(label=>({content:label,rowSpan:3,styles:{halign:'center' as const,valign:'middle' as const,fillColor:[0,112,192] as [number,number,number],textColor:255,fontStyle:'bold' as const}}));
+  const monthRow=[...fixedHead,...bands.map((b,i)=>({content:b.label,colSpan:b.end-b.start+1,styles:{halign:'center' as const,fillColor:(i%2===0?[128,128,0]:[255,255,0]) as [number,number,number],textColor:i%2===0?255:0,fontStyle:'bold' as const}})),...tailHead];
+  const dowRow=days.map(d=>({content:DOW[d.getDay()],styles:{halign:'center' as const,fillColor:(d.getDay()===0?[255,255,0]:[217,217,217]) as [number,number,number],fontStyle:'bold' as const}}));
+  const dateRow=days.map(d=>({content:`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,styles:{halign:'center' as const,fillColor:(d.getDay()===0?[255,255,0]:[0,112,192]) as [number,number,number],textColor:d.getDay()===0?0:255,fontStyle:'bold' as const}}));
+
   const dayTotals=days.map((_,i)=>rows.reduce((acc,r)=>acc+(r.dayVals[i]==='1'?1:0),0));
-  const body=[...rows.map(r=>[`${r.item}`,r.nombre,r.cargo,r.dni,...r.dayVals,`${r.cant}`,`S/ ${r.tarifa.toFixed(2)}`,`S/ ${r.total.toFixed(2)}`]),['','TOTAL','','',...dayTotals.map(s=>s>0?`${s}`:''),`${totalCant}`,'',`S/ ${grandTotal.toFixed(2)}`]];
+  const body=[
+   ...rows.map(r=>[`${r.item}`,r.dni,r.nombre,r.cargo,r.roomNumber,r.roomNumber,...r.dayVals,`${r.cant}`,`S/ ${r.tarifa.toFixed(2)}`,`S/ ${r.total.toFixed(2)}`]),
+   ['','','','','','',...dayTotals.map(s=>s>0?`${s}`:''),`${totalDias}`,'',`S/ ${grandTotal.toFixed(2)}`],
+  ];
   const totalsRowIdx=body.length-1;
-  autoTable(doc,{startY:y,head,body,margin:{left:margin,right:margin},theme:'grid',styles:{fontSize:6,cellPadding:{top:1.2,bottom:1.2,left:0.8,right:0.8},valign:'middle',overflow:'ellipsize'},headStyles:{fillColor:[184,204,228],textColor:[0,0,0],fontStyle:'bold',halign:'center',fontSize:6},columnStyles:{0:{halign:'center',cellWidth:W_NUM},1:{halign:'left',cellWidth:W_NAME},2:{halign:'center',cellWidth:W_CARGO,fontSize:5.5,overflow:'visible'},3:{halign:'center',cellWidth:W_DNI},...Object.fromEntries(days.map((_,i)=>[4+i,{halign:'center',cellWidth:dayW,cellPadding:{top:1.2,bottom:1.2,left:0.3,right:0.3}}])),[4+days.length]:{halign:'center',cellWidth:W_CANT},[4+days.length+1]:{halign:'right',cellWidth:W_TAR},[4+days.length+2]:{halign:'right',cellWidth:W_TOT}},didParseCell:(data)=>{if(data.section==='body'){const isDayCol=data.column.index>=4&&data.column.index<4+days.length;if(data.row.index===totalsRowIdx){data.cell.styles.fillColor=[217,217,217];data.cell.styles.fontStyle='bold';data.cell.styles.halign=isDayCol?'center':data.column.index<=1?'center':'right'}else if(isDayCol&&data.cell.raw==='1'){data.cell.styles.fillColor=[146,208,80];data.cell.styles.fontStyle='bold'}}}});
+  const usable=pageW-margin*2;
+  const W_ITEM=7,W_DNI=15,W_NAME=42,W_CARGO=15,W_HAB=9,W_HABN=11,W_CANT=9,W_TAR=13,W_TOT=15;
+  const fixedW=W_ITEM+W_DNI+W_NAME+W_CARGO+W_HAB+W_HABN,tailW=W_CANT+W_TAR+W_TOT;
+  const dayW=Math.max(4,(usable-fixedW-tailW)/days.length);
+
+  autoTable(doc,{startY:y,head:[monthRow,dowRow,dateRow],body,margin:{left:margin,right:margin},theme:'grid',
+   styles:{fontSize:5.5,cellPadding:{top:1,bottom:1,left:0.6,right:0.6},valign:'middle',overflow:'ellipsize'},
+   columnStyles:{0:{halign:'center',cellWidth:W_ITEM},1:{halign:'center',cellWidth:W_DNI},2:{halign:'left',cellWidth:W_NAME},3:{halign:'left',cellWidth:W_CARGO,fontSize:5},4:{halign:'center',cellWidth:W_HAB},5:{halign:'center',cellWidth:W_HABN},
+    ...Object.fromEntries(days.map((_,i)=>[6+i,{halign:'center',cellWidth:dayW,cellPadding:{top:1,bottom:1,left:0.2,right:0.2}}])),
+    [6+days.length]:{halign:'center',cellWidth:W_CANT},[6+days.length+1]:{halign:'right',cellWidth:W_TAR},[6+days.length+2]:{halign:'right',cellWidth:W_TOT}},
+   didParseCell:(data)=>{if(data.section==='body'){const isDayCol=data.column.index>=6&&data.column.index<6+days.length;if(data.row.index===totalsRowIdx){data.cell.styles.fillColor=[0,176,240];data.cell.styles.fontStyle='bold';data.cell.styles.halign=isDayCol?'center':'right'}else if(isDayCol&&data.cell.raw==='1'){data.cell.styles.fillColor=[146,208,80];data.cell.styles.fontStyle='bold'}}}});
+
+  // @ts-expect-error jspdf-autotable attaches lastAutoTable at runtime
+  const tableEndY:number=doc.lastAutoTable?.finalY??y+40;
+  doc.setFillColor(146,208,80);doc.rect(pageW-margin-70,tableEndY+3,70,7,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(0,0,0);
+  doc.text('TOTAL A FACTURAR',pageW-margin-68,tableEndY+7.5);
+  doc.text(`S/. ${grandTotal.toFixed(2)}`,pageW-margin-3,tableEndY+7.5,{align:'right'});
+
+  const igv=grandTotal*0.18,finalTotal=grandTotal+igv;
+  autoTable(doc,{startY:tableEndY+13,body:[['SUBTOTAL',`S/ ${grandTotal.toFixed(2)}`],['IGV 18%',`S/ ${igv.toFixed(2)}`],['TOTAL',`S/ ${finalTotal.toFixed(2)}`]],
+   margin:{left:pageW-margin-60,right:margin},theme:'grid',
+   styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},fillColor:[217,217,217],fontStyle:'bold'},
+   columnStyles:{0:{cellWidth:30,halign:'left'},1:{cellWidth:30,halign:'right'}}});
+
   const totalPages=doc.getNumberOfPages();
   for(let p=1;p<=totalPages;p++){doc.setPage(p);const pageH=doc.internal.pageSize.getHeight();doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(120,120,120);doc.text(`Generado por ValStay Empresa · ${session.organizationName}`,pageW-margin,pageH-5.5,{align:'right'})}
   doc.save(`valorizacion_${hotelDetail.name.replace(/[^a-z0-9]+/gi,'_')}_${valuation.startDate}_al_${valuation.endDate}.pdf`);
